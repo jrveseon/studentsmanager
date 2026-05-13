@@ -13,6 +13,9 @@ app = Flask(__name__)
 app.config['DATABASE'] = os.path.join(os.path.dirname(__file__), 'data', 'class.db')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
+# 确保数据库初始化（gunicorn 导入时触发，不依赖 __main__）
+init_db()
+
 
 def get_cohort_info():
     cid = get_active_cohort_id(g.db)
