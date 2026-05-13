@@ -4,6 +4,9 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'class.db')
 
+# 确保 data 目录存在（部署到 Render 等平台时需要）
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
 # 预定义学期列表（按入学年份自动计算）
 SEMESTER_DEFS = [
     ('七上', 0, 1),  # (名称, 年偏移, 学期序号)
