@@ -321,8 +321,10 @@ def switch_active_semester():
         if not row:
             return jsonify({'ok': False, 'error': '学期不存在'}), 404
         set_active_semester_id(g.db, sid)
-        session['active_semester_id'] = sid  # 同步到 session，防数据库重置丢失
-    return jsonify({'ok': True, 'semester': dict_from_row(row)})
+        session['active_semester_id'] = sid
+        return jsonify({'ok': True, 'semester': dict_from_row(row)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
 
 
 @app.route('/api/semesters/<int:sid>', methods=['PUT'])
