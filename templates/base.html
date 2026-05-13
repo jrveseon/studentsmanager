@@ -132,7 +132,7 @@
 </div>
 
 <!-- 主内容区 -->
-<main class="md:ml-56 pt-24 md:pt-0 min-h-full">
+<main class="md:ml-56 pt-24 md:pt-0 pb-20 md:pb-0 min-h-full">
     <div class="p-4 md:p-6 max-w-7xl mx-auto">
         {% block content %}{% endblock %}
     </div>
@@ -150,10 +150,10 @@
 
     <!-- AI浮窗 -->
     <div x-show="open" x-cloak @click.away="open = false"
-         class="fixed bottom-36 md:bottom-20 right-4 z-50 w-[88vw] md:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col"
-         style="max-height: 70vh;">
+         class="fixed bottom-24 md:bottom-20 left-4 md:left-auto right-4 z-50 w-[88vw] md:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col"
+         style="max-height: 60vh;">
 
-        <!-- 头部 -->
+        <!-- 头部 - 可拖拽关闭 -->
         <div class="flex items-center gap-2 px-3 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white shrink-0">
             <div class="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center">
                 <i class="lucide lucide-sparkles text-white text-xs"></i>
@@ -228,7 +228,7 @@
     <a href="/points" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_points %}text-gray-400{% endblock %}"><i class="lucide lucide-star text-lg"></i><span>积分</span></a>
     <a href="/scores" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_scores %}text-gray-400{% endblock %}"><i class="lucide lucide-graduation-cap text-lg"></i><span>成绩</span></a>
     <a href="/events" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_events %}text-gray-400{% endblock %}"><i class="lucide lucide-calendar-days text-lg"></i><span>事件</span></a>
-    <a href="/ai" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_ai %}text-gray-400{% endblock %}"><i class="lucide lucide-bot text-lg"></i><span>AI</span></a>
+    <a href="/settings" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_settings %}text-gray-400{% endblock %}"><i class="lucide lucide-settings text-lg"></i><span>设置</span></a>
 </nav>
 
 <script>
