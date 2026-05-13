@@ -3,7 +3,7 @@ import os
 import json
 import uuid
 from datetime import datetime, date
-from flask import Flask, render_template, request, jsonify, g, send_from_directory
+from flask import Flask, render_template, request, jsonify, g, session, send_from_directory
 from db import (get_db, init_db, dict_from_row, dicts_from_rows,
                 get_active_cohort_id, set_active_cohort_id,
                 get_active_semester_id, set_active_semester_id,
@@ -12,6 +12,7 @@ from db import (get_db, init_db, dict_from_row, dicts_from_rows,
 app = Flask(__name__)
 app.config['DATABASE'] = os.path.join(os.path.dirname(__file__), 'data', 'class.db')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.secret_key = os.environ.get('FLASK_SECRET', 'sun-class-manager-2024-default-key')
 
 # 确保数据库初始化（gunicorn 导入时触发，不依赖 __main__）
 init_db()
@@ -43,10 +44,31 @@ def require_semester():
     return get_active_semester_id(g.db)
 
 
+def restore_from_session():
+    """从 Flask session 恢复届次/学期（解决 Render 等平台数据库重置问题）"""
+    cid = session.get('active_cohort_id')
+    sid = session.get('active_semester_id')
+    if cid:
+        db_cid = get_active_cohort_id(g.db)
+        if not db_cid:
+            # 数据库被重置了，尝试从 session 恢复
+            row = g.db.execute("SELECT id FROM cohorts WHERE id = ?", (cid,)).fetchone()
+            if row:
+                set_active_cohort_id(g.db, cid)
+    if sid:
+        db_sid = get_active_semester_id(g.db)
+        if not db_sid:
+            row = g.db.execute("SELECT id FROM semesters WHERE id = ?", (sid,)).fetchone()
+            if row:
+                set_active_semester_id(g.db, sid)
+
+
 # ── 连接管理 ───────────────────────────────────────────
 @app.before_request
 def before_request():
     g.db = get_db()
+    # 从 session 恢复届次/学期信息（应对 Render 等平台数据库重置）
+    restore_from_session()
 
 
 @app.teardown_request
@@ -230,10 +252,12 @@ def switch_active_cohort():
     if not row:
         return jsonify({'ok': False, 'error': '届次不存在'}), 404
     set_active_cohort_id(g.db, cid)
+    session['active_cohort_id'] = cid  # 同步到 session，防数据库重置丢失
     # 切换届次时，自动选第一个学期
     first_sem = g.db.execute("SELECT id FROM semesters WHERE cohort_id = ? ORDER BY sort_order LIMIT 1", (cid,)).fetchone()
     if first_sem:
         set_active_semester_id(g.db, first_sem['id'])
+        session['active_semester_id'] = first_sem['id']
     return jsonify({'ok': True, 'cohort': dict_from_row(row)})
 
 
@@ -265,6 +289,7 @@ def switch_active_semester():
     if not row:
         return jsonify({'ok': False, 'error': '学期不存在'}), 404
     set_active_semester_id(g.db, sid)
+    session['active_semester_id'] = sid  # 同步到 session，防数据库重置丢失
     return jsonify({'ok': True, 'semester': dict_from_row(row)})
 
 
