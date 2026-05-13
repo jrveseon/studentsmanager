@@ -244,21 +244,23 @@ def get_active_cohort():
 
 @app.route('/api/cohorts/active', methods=['POST'])
 def switch_active_cohort():
-    data = request.json
-    cid = data.get('cohort_id')
-    if not cid:
-        return jsonify({'ok': False, 'error': '缺少cohort_id'}), 400
-    row = g.db.execute("SELECT * FROM cohorts WHERE id = ?", (cid,)).fetchone()
-    if not row:
-        return jsonify({'ok': False, 'error': '届次不存在'}), 404
-    set_active_cohort_id(g.db, cid)
-    session['active_cohort_id'] = cid  # 同步到 session，防数据库重置丢失
-    # 切换届次时，自动选第一个学期
-    first_sem = g.db.execute("SELECT id FROM semesters WHERE cohort_id = ? ORDER BY sort_order LIMIT 1", (cid,)).fetchone()
-    if first_sem:
-        set_active_semester_id(g.db, first_sem['id'])
-        session['active_semester_id'] = first_sem['id']
-    return jsonify({'ok': True, 'cohort': dict_from_row(row)})
+    try:
+        data = request.json
+        cid = data.get('cohort_id')
+        if not cid:
+            return jsonify({'ok': False, 'error': '缺少cohort_id'}), 400
+        row = g.db.execute("SELECT * FROM cohorts WHERE id = ?", (cid,)).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': '届次不存在'}), 404
+        set_active_cohort_id(g.db, cid)
+        session['active_cohort_id'] = cid
+        first_sem = g.db.execute("SELECT id FROM semesters WHERE cohort_id = ? ORDER BY sort_order LIMIT 1", (cid,)).fetchone()
+        if first_sem:
+            set_active_semester_id(g.db, first_sem['id'])
+            session['active_semester_id'] = first_sem['id']
+        return jsonify({'ok': True, 'cohort': dict_from_row(row)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
 
 
 # ── 学期 API ───────────────────────────────────────────
@@ -281,15 +283,16 @@ def get_active_semester():
 
 @app.route('/api/semesters/active', methods=['POST'])
 def switch_active_semester():
-    data = request.json
-    sid = data.get('semester_id')
-    if not sid:
-        return jsonify({'ok': False, 'error': '缺少semester_id'}), 400
-    row = g.db.execute("SELECT * FROM semesters WHERE id = ?", (sid,)).fetchone()
-    if not row:
-        return jsonify({'ok': False, 'error': '学期不存在'}), 404
-    set_active_semester_id(g.db, sid)
-    session['active_semester_id'] = sid  # 同步到 session，防数据库重置丢失
+    try:
+        data = request.json
+        sid = data.get('semester_id')
+        if not sid:
+            return jsonify({'ok': False, 'error': '缺少semester_id'}), 400
+        row = g.db.execute("SELECT * FROM semesters WHERE id = ?", (sid,)).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': '学期不存在'}), 404
+        set_active_semester_id(g.db, sid)
+        session['active_semester_id'] = sid  # 同步到 session，防数据库重置丢失
     return jsonify({'ok': True, 'semester': dict_from_row(row)})
 
 
