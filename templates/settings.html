@@ -9,7 +9,10 @@
     <!-- Tab导航 -->
     <div class="flex gap-1 mb-5 bg-gray-100 p-1 rounded-lg w-fit">
         <button @click="tab = 'cohort'" :class="tab==='cohort' ? 'bg-white shadow text-gray-800' : 'text-gray-500'" class="px-4 py-1.5 text-sm rounded-md">
-            <i class="lucide lucide-layers text-sm mr-1"></i> 届次学期设置
+            <i class="lucide lucide-layers text-sm mr-1"></i> 届次学期
+        </button>
+        <button @click="tab = 'manage'" :class="tab==='manage' ? 'bg-white shadow text-gray-800' : 'text-gray-500'" class="px-4 py-1.5 text-sm rounded-md">
+            <i class="lucide lucide-folder-cog text-sm mr-1"></i> 届次管理
         </button>
         <button @click="tab = 'ai'" :class="tab==='ai' ? 'bg-white shadow text-gray-800' : 'text-gray-500'" class="px-4 py-1.5 text-sm rounded-md">
             <i class="lucide lucide-bot text-sm mr-1"></i> AI 配置
@@ -112,6 +115,81 @@
         </div>
     </div>
 
+    <!-- ============ 届次管理 ============ -->
+    <div x-show="tab === 'manage'" x-cloak>
+        <h1 class="text-lg font-bold mb-4">届次管理</h1>
+
+        <!-- 活跃届次 -->
+        <div class="card p-5 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <i class="lucide lucide-layers text-green-500"></i> 当前届次
+                <span class="text-xs text-gray-400" x-text="'(' + cohorts.length + ' 个)'"></span>
+            </h3>
+            <div x-show="!cohorts.length" class="text-center py-6 text-gray-400 text-sm">暂无届次</div>
+            <div class="space-y-2">
+                <template x-for="c in cohorts" :key="c.id">
+                    <div class="flex items-center justify-between py-3 px-4 rounded-lg border border-gray-100 hover:bg-gray-50"
+                         :class="{'border-primary-200 bg-primary-50/30': c.id == activeCohortId}">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                                 :class="c.id == activeCohortId ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-500'"
+                                 x-text="c.class_no"></div>
+                            <div>
+                                <div class="text-sm font-medium" x-text="c.display_name"></div>
+                                <div class="text-xs text-gray-400" x-text="'创建于 ' + (c.created_at || '').slice(0,10)"></div>
+                            </div>
+                            <span x-show="c.id == activeCohortId" class="px-2 py-0.5 bg-primary-100 text-primary-600 rounded text-xs font-medium">当前</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button x-show="c.id != activeCohortId" @click="switchCohort(c.id)" class="text-xs text-primary-500 hover:underline px-2 py-1">切换</button>
+                            <button @click="archiveCohort(c)" class="text-xs text-gray-400 hover:text-amber-600 px-2 py-1">归档</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- 已归档届次 -->
+        <div class="card p-5 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <i class="lucide lucide-archive text-amber-500"></i> 已归档届次
+                <span class="text-xs text-gray-400" x-text="'(' + archived.length + ' 个)'"></span>
+            </h3>
+            <div x-show="!archived.length" class="text-center py-6 text-gray-400 text-sm">
+                <i class="lucide lucide-inbox text-2xl text-gray-200 block mb-2"></i>
+                暂无已归档届次
+            </div>
+            <div class="space-y-2">
+                <template x-for="c in archived" :key="c.id">
+                    <div class="flex items-center justify-between py-3 px-4 rounded-lg border border-gray-100 bg-gray-50/50">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-500" x-text="c.class_no"></div>
+                            <div>
+                                <div class="text-sm font-medium text-gray-500" x-text="c.display_name"></div>
+                                <div class="text-xs text-gray-400" x-text="'创建于 ' + (c.created_at || '').slice(0,10)"></div>
+                            </div>
+                            <span class="px-2 py-0.5 bg-gray-100 text-gray-400 rounded text-xs">已归档</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button @click="restoreCohort(c)" class="text-xs text-emerald-600 hover:underline px-2 py-1">恢复</button>
+                            <button @click="permanentDeleteCohort(c)" class="text-xs text-red-400 hover:text-red-600 px-2 py-1">彻底删除</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <i class="lucide lucide-help-circle text-gray-400"></i> 说明
+            </h3>
+            <div class="text-sm text-gray-500 space-y-2">
+                <p><b>归档</b>：隐藏届次，数据保留，可随时恢复。</p>
+                <p><b>彻底删除</b>：<span class="text-red-500">永久删除该届次所有学生、积分、成绩、事件数据，不可恢复。</span></p>
+            </div>
+        </div>
+    </div>
+
     <!-- ============ AI 配置 ============ -->
     <div x-show="tab === 'ai'">
         <h1 class="text-lg font-bold mb-4">AI 配置</h1>
@@ -193,7 +271,7 @@
 function settingsPage() {
     return {
         tab: 'cohort',
-        cohorts: [], activeCohortId: '{{ cohort.id if cohort else "" }}',
+        cohorts: [], archived: [], activeCohortId: '{{ cohort.id if cohort else "" }}',
         currentSemId: '{{ semester.id if semester else "" }}',
         newCohort: { grade: '', class_no: '' },
         ai: { provider: '', api_key: '', model: '', api_url: '' },
@@ -202,6 +280,7 @@ function settingsPage() {
 
         async load() {
             this.cohorts = await api.get('/api/cohorts');
+            this.archived = await api.get('/api/cohorts/archived');
             // 加载AI配置
             const settings = await api.get('/api/settings');
             this.ai.provider = settings.ai_provider || '';
@@ -230,6 +309,19 @@ function settingsPage() {
         async archiveCohort(c) {
             if (!confirm('确定归档 '+c.display_name+'？数据不会丢失。')) return;
             await api.del('/api/cohorts/' + c.id);
+            location.reload();
+        },
+
+        async restoreCohort(c) {
+            if (!confirm('确定恢复 '+c.display_name+'？')) return;
+            await api.post('/api/cohorts/' + c.id + '/restore');
+            location.reload();
+        },
+
+        async permanentDeleteCohort(c) {
+            if (!confirm('⚠️ 确定彻底删除 '+c.display_name+'？\n\n该届次下所有学生、积分、成绩、事件数据将被永久删除，不可恢复！')) return;
+            if (!confirm('再次确认：真的要永久删除 '+c.display_name+' 吗？')) return;
+            await api.del('/api/cohorts/' + c.id + '?permanent=true');
             location.reload();
         },
 

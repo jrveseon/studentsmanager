@@ -176,6 +176,19 @@ def get_cohorts():
     return jsonify(dicts_from_rows(rows))
 
 
+@app.route('/api/cohorts/archived', methods=['GET'])
+def get_archived_cohorts():
+    rows = g.db.execute("SELECT * FROM cohorts WHERE is_active = 0 ORDER BY grade DESC, class_no").fetchall()
+    return jsonify(dicts_from_rows(rows))
+
+
+@app.route('/api/cohorts/<int:cid>/restore', methods=['POST'])
+def restore_cohort(cid):
+    g.db.execute("UPDATE cohorts SET is_active = 1 WHERE id = ?", (cid,))
+    g.db.commit()
+    return jsonify({'ok': True})
+
+
 @app.route('/api/cohorts', methods=['POST'])
 def create_cohort():
     data = request.json
@@ -224,7 +237,23 @@ def update_cohort(cid):
 
 @app.route('/api/cohorts/<int:cid>', methods=['DELETE'])
 def delete_cohort(cid):
-    g.db.execute("UPDATE cohorts SET is_active = 0 WHERE id = ?", (cid,))
+    permanent = request.args.get('permanent', '').lower() in ('1', 'true', 'yes')
+    if permanent:
+        # 硬删除：需要先关联合法学生的数据
+        db = g.db
+        db.execute("DELETE FROM events WHERE student_id IN (SELECT id FROM students WHERE cohort_id = ?)", (cid,))
+        db.execute("DELETE FROM weekly_points WHERE student_id IN (SELECT id FROM students WHERE cohort_id = ?)", (cid,))
+        db.execute("DELETE FROM score_items WHERE student_id IN (SELECT id FROM students WHERE cohort_id = ?)", (cid,))
+        exam_ids = db.execute("SELECT id FROM score_exams WHERE cohort_id = ?", (cid,)).fetchall()
+        for e in exam_ids:
+            db.execute("DELETE FROM score_items WHERE exam_id = ?", (e['id'],))
+        db.execute("DELETE FROM score_exams WHERE cohort_id = ?", (cid,))
+        db.execute("DELETE FROM semesters WHERE cohort_id = ?", (cid,))
+        db.execute("DELETE FROM students WHERE cohort_id = ?", (cid,))
+        db.execute("DELETE FROM cohorts WHERE id = ?", (cid,))
+    else:
+        # 软删除（归档）
+        g.db.execute("UPDATE cohorts SET is_active = 0 WHERE id = ?", (cid,))
     active_id = get_active_cohort_id(g.db)
     if active_id == cid:
         row = g.db.execute("SELECT id FROM cohorts WHERE is_active = 1 ORDER BY grade DESC LIMIT 1").fetchone()
