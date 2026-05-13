@@ -86,9 +86,11 @@ class Database:
                 fake.execute(f"SELECT {self._last_insert_id or 0} AS id")
                 return fake
 
-            # INSERT 自动追加 RETURNING id
+            # INSERT 自动追加 RETURNING id（仅针对有 id 列的表）
             if upper.startswith('INSERT') and 'RETURNING' not in upper:
-                sql = sql.rstrip(';') + ' RETURNING id'
+                m = re.search(r'INSERT\s+INTO\s+(\w+)', sql, re.IGNORECASE)
+                if m and m.group(1) not in ('settings',):
+                    sql = sql.rstrip(';') + ' RETURNING id'
 
             c.execute(sql, params or ())
 
