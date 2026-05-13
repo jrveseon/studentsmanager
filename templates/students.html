@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block nav_students %}nav-active{% endblock %}
+{% block tab_students %}text-primary-500{% endblock %}
+{% block mobile_title %}学生管理{% endblock %}
+
+{% block content %}
+<div x-data="studentsPage()" x-init="load()">
+    <!-- 头部 -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <h1 class="text-lg font-bold">学生管理</h1>
+        <div class="flex gap-2">
+            <input type="text" x-model="search" @input.debounce.300ms="load()" placeholder="搜索姓名/学号"
+                   class="border border-gray-200 px-3 py-1.5 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-primary-300">
+            <select x-model="group" @change="load()" class="border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300">
+                <option value="">全部小组</option>
+                <template x-for="g in groups" :key="g">
+                    <option :value="g" x-text="g + '组'"></option>
+                </template>
+            </select>
+            <button @click="showModal = true; modalStudent = {student_no:'', name:'', gender:'男'}" class="px-3 py-1.5 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600">
+                + 添加
+            </button>
+        </div>
+    </div>
+
+    <!-- 批量操作工具栏 -->
+    <div x-show="selected.size > 0" x-cloak class="flex items-center gap-3 mb-3 px-4 py-2.5 bg-primary-50 border border-primary-200 rounded-lg text-sm">
+        <span class="text-primary-700 font-medium" x-text="'已选择 ' + selected.size + ' 人'"></span>
+        <span class="text-gray-300">|</span>
+        <button @click="batchDelete()" class="text-red-500 hover:underline text-xs">批量删除</button>
+        <span class="text-gray-300">|</span>
+        <span class="text-gray-500 text-xs">批量分组：</span>
+        <select x-model="batchGroupName" class="border border-gray-200 px-2 py-1 text-xs focus:outline-none">
+            <option value="">选择小组</option>
+            <template x-for="g in groups" :key="g">
+                <option :value="g" x-text="g + '组'"></option>
+            </template>
+            <option value="__new__">新建小组...</option>
+        </select>
+        <input x-show="batchGroupName === '__new__'" x-model="newGroupName" placeholder="输入新小组名" class="border border-gray-200 px-2 py-1 text-xs w-24 focus:outline-none">
+        <button @click="batchSetGroup()" class="px-2.5 py-1 bg-primary-500 text-white text-xs rounded hover:bg-primary-600">确定</button>
+        <button @click="selected.clear(); batchGroupName = ''" class="text-gray-400 hover:text-gray-600 text-xs ml-auto">取消选择</button>
+    </div>
+
+    <!-- 学生列表（div布局，避免template在tbody中的问题） -->
+    <div class="card overflow-hidden">
+        <!-- 表头 -->
+        <div class="hidden md:flex bg-gray-50 text-xs text-gray-500 border-b border-gray-100 px-2">
+            <div class="w-10 p-3"><input type="checkbox" @change="selectAll($event.target.checked)" :checked="selected.size === students.length && students.length > 0" class="rounded border-gray-300 text-primary-500"></div>
+            <div class="flex-1 grid grid-cols-7 gap-2">
+                <div class="p-3">学号</div>
+                <div class="p-3">姓名</div>
+                <div class="p-3">性别</div>
+                <div class="p-3">小组</div>
+                <div class="p-3">出生日期</div>
+                <div class="p-3">家长电话</div>
+                <div class="p-3">操作</div>
+            </div>
+        </div>
+        <!-- 数据行 -->
+        <div class="divide-y divide-gray-50">
+            <template x-for="s in students" :key="s.id">
+                <div class="flex items-center px-2 py-2.5 hover:bg-gray-50" :class="{'bg-primary-50/50': selected.has(s.id)}">
+                    <!-- 复选框 -->
+                    <div class="w-10 shrink-0"><input type="checkbox" :checked="selected.has(s.id)" @change="toggleSelect(s.id)" class="rounded border-gray-300 text-primary-500"></div>
+                    <!-- PC 多列布局 -->
+                    <div class="hidden md:grid md:grid-cols-7 md:gap-2 md:flex-1 md:items-center text-sm">
+                        <div class="font-mono text-xs text-gray-500" x-text="s.student_no"></div>
+                        <div><a :href="'/students/' + s.id" class="text-primary-600 hover:underline font-medium" x-text="s.name"></a></div>
+                        <div class="text-gray-600" x-text="s.gender"></div>
+                        <div><span class="px-2 py-0.5 bg-gray-100 rounded text-xs" x-text="(s.group_name||'-') + (s.group_order ? '·'+s.group_order : '')"></span></div>
+                        <div class="text-gray-500" x-text="s.birth_date || '-'"></div>
+                        <div class="text-gray-500 font-mono text-xs" x-text="s.parent_phone || '-'"></div>
+                        <div>
+                            <button @click="editStudent(s)" class="text-xs text-primary-500 hover:underline mr-2">编辑</button>
+                            <button @click="deleteStudent(s)" class="text-xs text-red-500 hover:underline">删除</button>
+                        </div>
+                    </div>
+                    <!-- 手机卡片布局 -->
+                    <div class="md:hidden flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <a :href="'/students/' + s.id" class="font-medium text-primary-600 text-sm" x-text="s.name"></a>
+                            <span class="text-xs text-gray-400" x-text="'#' + s.student_no"></span>
+                        </div>
+                        <div class="flex gap-3 mt-0.5 text-xs text-gray-500">
+                            <span x-text="s.gender"></span>
+                            <span x-text="(s.group_name||'-') + '组'"></span>
+                            <span x-show="s.parent_phone" x-text="s.parent_phone"></span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div x-show="!students.length" class="text-center py-10 text-gray-400 text-sm">暂无学生数据，请先<a href="/import" class="text-primary-500 hover:underline">导入</a></div>
+    </div>
+
+    <!-- 模态框 -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showModal = false">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-5" @click.stop>
+            <h3 class="text-base font-semibold mb-4" x-text="modalStudent.id ? '编辑学生' : '添加学生'"></h3>
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="text-xs text-gray-500">学号 *</label><input x-model="modalStudent.student_no" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none focus:ring-2 focus:ring-primary-300"></div>
+                    <div><label class="text-xs text-gray-500">姓名 *</label><input x-model="modalStudent.name" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none focus:ring-2 focus:ring-primary-300"></div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div><label class="text-xs text-gray-500">性别</label><select x-model="modalStudent.gender" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none"><option>男</option><option>女</option></select></div>
+                    <div><label class="text-xs text-gray-500">小组</label><input x-model="modalStudent.group_name" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none"></div>
+                    <div><label class="text-xs text-gray-500">组内序号</label><input x-model.number="modalStudent.group_order" type="number" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none"></div>
+                </div>
+                <div><label class="text-xs text-gray-500">出生日期</label><input x-model="modalStudent.birth_date" type="date" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none"></div>
+                <div class="grid grid-cols-2 gap-3"><div><label class="text-xs text-gray-500">联系电话</label><input x-model="modalStudent.phone" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none"></div><div><label class="text-xs text-gray-500">家长电话</label><input x-model="modalStudent.parent_phone" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none"></div></div>
+                <div><label class="text-xs text-gray-500">备注</label><textarea x-model="modalStudent.notes" rows="2" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none"></textarea></div>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button @click="showModal = false" class="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">取消</button>
+                <button @click="saveStudent()" class="px-4 py-1.5 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function studentsPage() {
+    return {
+        students: [],
+        groups: [],
+        search: '',
+        group: '',
+        showModal: false,
+        modalStudent: {},
+        selected: new Set(),
+        batchGroupName: '',
+        newGroupName: '',
+
+        async load() {
+            const params = new URLSearchParams();
+            if (this.search) params.set('search', this.search);
+            if (this.group) params.set('group', this.group);
+            this.students = await api.get('/api/students?' + params);
+            this.groups = await api.get('/api/groups');
+            this.selected.clear();
+        },
+
+        toggleSelect(id) {
+            if (this.selected.has(id)) this.selected.delete(id);
+            else this.selected.add(id);
+        },
+
+        selectAll(checked) {
+            if (checked) this.students.forEach(s => this.selected.add(s.id));
+            else this.selected.clear();
+        },
+
+        editStudent(s) {
+            this.modalStudent = {...s};
+            this.showModal = true;
+        },
+
+        async saveStudent() {
+            if (!this.modalStudent.student_no || !this.modalStudent.name) { alert('学号和姓名必填'); return; }
+            let res;
+            if (this.modalStudent.id) res = await api.put('/api/students/' + this.modalStudent.id, this.modalStudent);
+            else res = await api.post('/api/students', this.modalStudent);
+            if (res.ok) { this.showModal = false; this.load(); }
+            else alert(res.error || '保存失败');
+        },
+
+        async deleteStudent(s) {
+            if (!confirm('确定删除 ' + s.name + '？')) return;
+            await api.del('/api/students/' + s.id);
+            this.load();
+        },
+
+        async batchDelete() {
+            if (!this.selected.size) return;
+            if (!confirm('确定批量删除 ' + this.selected.size + ' 名学生？')) return;
+            const res = await api.post('/api/students/batch/delete', { ids: [...this.selected] });
+            if (res.ok) this.load();
+            else alert(res.error || '删除失败');
+        },
+
+        async batchSetGroup() {
+            if (!this.selected.size) return;
+            let name = this.batchGroupName;
+            if (name === '__new__') name = this.newGroupName;
+            if (!name) { alert('请选择或输入小组名称'); return; }
+            if (!confirm('将 ' + this.selected.size + ' 名学生设为「' + name + '组」？')) return;
+            const res = await api.post('/api/students/batch/group', { ids: [...this.selected], group_name: name });
+            if (res.ok) { this.batchGroupName = ''; this.newGroupName = ''; this.load(); }
+            else alert(res.error || '设置失败');
+        }
+    };
+}
+</script>
+{% endblock %}

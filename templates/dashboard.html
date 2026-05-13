@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block nav_dashboard %}nav-active{% endblock %}
+{% block tab_dashboard %}text-primary-500{% endblock %}
+{% block mobile_title %}首页{% endblock %}
+
+{% block content %}
+{% if not cohort %}
+<!-- 无届次提示 -->
+<div class="flex flex-col items-center justify-center py-16">
+    <div class="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mb-4">
+        <i class="lucide lucide-layers text-primary-500 text-2xl"></i>
+    </div>
+    <h2 class="text-lg font-semibold mb-2">欢迎使用班级管理系统</h2>
+    <p class="text-sm text-gray-500 mb-4">请先创建一个届次来开始管理</p>
+    <a href="/settings" class="px-5 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600">去创建届次</a>
+</div>
+{% else %}
+<div x-data="dashboard()" x-init="load()">
+
+    <!-- AI对话框 -->
+    <div class="card p-3 mb-4" x-data="chatBox()">
+        <div class="flex items-center gap-2 mb-1 cursor-pointer" @click="expanded = !expanded">
+            <div class="w-6 h-6 bg-gradient-to-br from-primary-400 to-primary-600 rounded-lg flex items-center justify-center">
+                <i class="lucide lucide-sparkles text-white text-[10px]"></i>
+            </div>
+            <h3 class="text-xs font-semibold text-gray-700">AI 助手</h3>
+            <span class="text-[10px] text-gray-400">随时问我班级数据</span>
+            <i class="lucide ml-auto text-gray-400 text-[10px]" :class="expanded ? 'lucide-chevron-up' : 'lucide-chevron-down'"></i>
+        </div>
+
+        <div x-show="expanded" x-transition>
+            <!-- 消息列表 -->
+            <div class="space-y-2 mb-2 max-h-48 overflow-y-auto pr-1" id="chatMessages" x-ref="chatMessages">
+                <template x-for="(msg, i) in messages" :key="i">
+                    <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                        <div :class="msg.role === 'user'
+                            ? 'bg-primary-500 text-white rounded-2xl rounded-tr-sm'
+                            : 'bg-gray-100 text-gray-700 rounded-2xl rounded-tl-sm'"
+                            class="px-3 py-1.5 text-xs max-w-[85%] md:max-w-[70%] whitespace-pre-wrap" x-html="renderMarkdown(msg.content)">
+                        </div>
+                    </div>
+                </template>
+                <div x-show="loading" class="flex justify-start">
+                    <div class="bg-gray-100 rounded-2xl rounded-tl-sm px-3 py-1.5 text-xs text-gray-400">
+                        <span class="animate-pulse">思考中...</span>
+                    </div>
+                </div>
+                <div x-show="!messages.length && !loading" class="text-center py-2">
+                    <p class="text-xs text-gray-400 mb-1.5">试试问我：</p>
+                    <div class="flex flex-wrap gap-1 justify-center">
+                        <button @click="send('班级有多少人')" class="px-2 py-0.5 bg-gray-50 hover:bg-gray-100 rounded-full text-[10px] text-gray-500">班级有多少人</button>
+                        <button @click="send('积分排名')" class="px-2 py-0.5 bg-gray-50 hover:bg-gray-100 rounded-full text-[10px] text-gray-500">积分排名</button>
+                        <button @click="send('帮助')" class="px-2 py-0.5 bg-gray-50 hover:bg-gray-100 rounded-full text-[10px] text-gray-500">帮助</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入框 -->
+            <div class="flex flex-col gap-1.5">
+                <!-- 已选文件提示 -->
+                <div x-show="pendingFile" x-cloak class="flex items-center gap-1.5 px-2 py-1 bg-primary-50 border border-primary-200 rounded-lg text-[10px]">
+                    <i class="lucide lucide-file-text text-primary-500 text-xs"></i>
+                    <span class="flex-1 truncate text-primary-700" x-text="pendingFile?.name || ''"></span>
+                    <button @click="pendingFile = null" class="text-gray-400 hover:text-red-500 shrink-0">
+                        <i class="lucide lucide-x text-xs"></i>
+                    </button>
+                </div>
+
+                <div class="flex gap-1.5">
+                    <button @click="$refs.fileInput.click()" :disabled="loading"
+                            class="px-2 py-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 border border-gray-200 hover:border-primary-300 rounded-lg shrink-0 self-end flex items-center gap-1"
+                            :class="{'border-primary-400 bg-primary-50': pendingFile, 'opacity-40': loading}"
+                            title="上传 Excel 文件">
+                        <i class="lucide lucide-paperclip text-sm"></i>
+                        <span class="text-[10px] hidden sm:inline">上传文件</span>
+                    </button>
+                    <input type="file" x-ref="fileInput" accept=".xlsx,.xls"
+                           class="hidden" @change="selectFile($event)">
+
+                    <input type="text" x-model="input" @keydown.enter="send(input)"
+                           placeholder="输入消息..."
+                           class="flex-1 border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent"
+                           :disabled="loading">
+                    <button @click="send(input)" :disabled="loading || (!input.trim() && !pendingFile)"
+                            class="px-3 py-1.5 bg-primary-500 text-white text-xs rounded-lg hover:bg-primary-600 disabled:opacity-40 transition-colors">
+                        发送
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 概况卡片 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+        <div class="card p-4">
+            <div class="text-xs text-gray-400 mb-1">在读学生</div>
+            <div class="text-2xl font-bold text-primary-600" x-text="data.total_students || 0"></div>
+        </div>
+        <div class="card p-4">
+            <div class="text-xs text-gray-400 mb-1">当前学期</div>
+            <div class="text-sm font-medium text-gray-700" x-text="data.semester_name || '暂无'"></div>
+        </div>
+        <div class="card p-4">
+            <div class="text-xs text-gray-400 mb-1">最新周次</div>
+            <div class="text-2xl font-bold text-emerald-600" x-text="data.current_week ? '第' + data.current_week + '周' : '-'"></div>
+        </div>
+        <div class="card p-4">
+            <div class="text-xs text-gray-400 mb-1">本周人均积分</div>
+            <div class="text-2xl font-bold text-amber-600" x-text="data.weekly_avg || 0"></div>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4 mb-6">
+        <!-- 积分排行 Top5 -->
+        <div class="card p-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+                <i class="lucide lucide-trophy text-amber-500"></i> 积分 Top 5
+            </h3>
+            <div class="space-y-2">
+                <template x-for="(s, i) in data.top5 || []" :key="i">
+                    <div class="flex items-center gap-3">
+                        <span class="w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold"
+                              :class="i < 3 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'"
+                              x-text="i + 1"></span>
+                        <span class="flex-1 text-sm" x-text="s.name"></span>
+                        <span class="text-sm font-semibold text-emerald-600" x-text="s.total"></span>
+                    </div>
+                </template>
+                <div x-show="!data.top5?.length" class="text-sm text-gray-400 text-center py-4">暂无数据</div>
+            </div>
+        </div>
+
+        <!-- 积分 Bottom5 -->
+        <div class="card p-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+                <i class="lucide lucide-alert-triangle text-red-500"></i> 需关注学生
+            </h3>
+            <div class="space-y-2">
+                <template x-for="(s, i) in data.bottom5 || []" :key="i">
+                    <div class="flex items-center gap-3">
+                        <span class="w-5 h-5 rounded-full bg-red-50 text-red-500 text-xs flex items-center justify-center font-bold"
+                              x-text="i + 1"></span>
+                        <span class="flex-1 text-sm" x-text="s.name"></span>
+                        <span class="text-sm font-semibold text-red-500" x-text="s.total"></span>
+                    </div>
+                </template>
+                <div x-show="!data.bottom5?.length" class="text-sm text-gray-400 text-center py-4">暂无数据</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近事件 -->
+    <div class="card p-4 mb-6">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <i class="lucide lucide-calendar-days text-primary-500"></i> 最近事件
+            </h3>
+            <a href="/events" class="text-xs text-primary-500 hover:underline">查看全部</a>
+        </div>
+        <div class="space-y-2">
+            <template x-for="ev in data.recent_events || []" :key="ev.id">
+                <div class="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                    <span class="inline-block px-2 py-0.5 rounded text-xs font-medium mt-0.5"
+                          :class="{
+                              'bg-red-50 text-red-600': ev.event_type === '违纪' || ev.event_type === '处分',
+                              'bg-emerald-50 text-emerald-600': ev.event_type === '表扬',
+                              'bg-blue-50 text-blue-600': ev.event_type === '谈话' || ev.event_type === '家访',
+                              'bg-gray-50 text-gray-600': true
+                          }"
+                          x-text="ev.event_type"></span>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm"><span class="font-medium" x-text="ev.student_name"></span> · <span x-text="ev.title"></span></div>
+                        <div class="text-xs text-gray-400" x-text="ev.event_date"></div>
+                    </div>
+                </div>
+            </template>
+            <div x-show="!data.recent_events?.length" class="text-sm text-gray-400 text-center py-4">暂无事件</div>
+        </div>
+    </div>
+
+    <!-- 最近考试 -->
+    <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <i class="lucide lucide-graduation-cap text-blue-500"></i> 最近考试
+            </h3>
+            <a href="/scores" class="text-xs text-primary-500 hover:underline">查看全部</a>
+        </div>
+        <div class="space-y-2">
+            <template x-for="ex in data.recent_exams || []" :key="ex.id">
+                <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div>
+                        <div class="text-sm font-medium" x-text="ex.name"></div>
+                        <div class="text-xs text-gray-400" x-text="ex.exam_date || ''"></div>
+                    </div>
+                    <div class="text-xs text-gray-500" x-text="(ex.student_count || 0) + '人参加'"></div>
+                </div>
+            </template>
+            <div x-show="!data.recent_exams?.length" class="text-sm text-gray-400 text-center py-4">暂无考试</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function dashboard() {
+    return {
+        data: {},
+        async load() {
+            this.data = await api.get('/api/dashboard');
+        }
+    };
+}
+
+function chatBox() {
+    return {
+        expanded: true,
+        messages: [],
+        input: '',
+        loading: false,
+        pendingFile: null,
+        STORAGE_KEY: 'ai_chat_history',
+
+        renderMarkdown(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                .replace(/\n/g, '<br>');
+        },
+
+        init() {
+            try {
+                const saved = localStorage.getItem(this.STORAGE_KEY);
+                if (saved) this.messages = JSON.parse(saved);
+            } catch (e) {}
+        },
+
+        saveHistory() {
+            try {
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.messages.slice(-50)));
+            } catch (e) {}
+        },
+
+        async send(text) {
+            const msg = (text || this.input || '').trim();
+            if (!msg && !this.pendingFile) return;
+            if (this.loading) return;
+
+            if (this.pendingFile) {
+                const fileName = this.pendingFile.name;
+                const file = this.pendingFile;
+                this.pendingFile = null;
+                this.input = '';
+                this.messages.push({role: 'user', content: `📎 ${fileName}` + (msg ? `\n${msg}` : '')});
+                this.loading = true;
+                this.scrollToBottom();
+                this.saveHistory();
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    if (msg) formData.append('message', msg);
+                    const res = await fetch('/api/chat/upload', {method: 'POST', body: formData});
+                    const data = await res.json();
+                    this.messages.push({role: 'assistant', content: data.reply || '文件处理完成'});
+                    this.saveHistory();
+                    if (data.actions && data.actions.length) {
+                        this.$root.__x.$data.load && this.$root.__x.$data.load();
+                    }
+                } catch (e) {
+                    this.messages.push({role: 'assistant', content: '⚠️ 文件上传出错'});
+                    this.saveHistory();
+                }
+                this.loading = false;
+                this.scrollToBottom();
+            } else {
+                this.input = '';
+                this.messages.push({role: 'user', content: msg});
+                this.loading = true;
+                this.scrollToBottom();
+                this.saveHistory();
+                try {
+                    const res = await api.post('/api/chat', {
+                        message: msg,
+                        messages: this.messages.slice(0, -1)
+                    });
+                    this.messages.push({role: 'assistant', content: res.reply || '（无回复）'});
+                    this.saveHistory();
+                    if (res.actions && res.actions.length) {
+                        this.$root.__x.$data.load && this.$root.__x.$data.load();
+                    }
+                } catch (e) {
+                    this.messages.push({role: 'assistant', content: '网络错误，请重试'});
+                }
+                this.loading = false;
+                this.scrollToBottom();
+            }
+        },
+
+        selectFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            event.target.value = '';
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                this.messages.push({role: 'assistant', content: '⚠️ 仅支持 Excel 文件（.xlsx / .xls）'});
+                this.saveHistory();
+                return;
+            }
+            this.pendingFile = file;
+        },
+
+        scrollToBottom() {
+            this.$nextTick(() => {
+                const el = this.$refs.chatMessages;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block nav_settings %}nav-active{% endblock %}
+{% block mobile_title %}设置{% endblock %}
+
+{% block content %}
+<div x-data="settingsPage()" x-init="load()">
+
+    <!-- Tab导航 -->
+    <div class="flex gap-1 mb-5 bg-gray-100 p-1 rounded-lg w-fit">
+        <button @click="tab = 'cohort'" :class="tab==='cohort' ? 'bg-white shadow text-gray-800' : 'text-gray-500'" class="px-4 py-1.5 text-sm rounded-md">
+            <i class="lucide lucide-layers text-sm mr-1"></i> 届次学期设置
+        </button>
+        <button @click="tab = 'ai'" :class="tab==='ai' ? 'bg-white shadow text-gray-800' : 'text-gray-500'" class="px-4 py-1.5 text-sm rounded-md">
+            <i class="lucide lucide-bot text-sm mr-1"></i> AI 配置
+        </button>
+    </div>
+
+    <!-- ============ 届次学期设置 ============ -->
+    <div x-show="tab === 'cohort'">
+        <h1 class="text-lg font-bold mb-4">届次学期设置</h1>
+
+        <!-- 新建届次 -->
+        <div class="card p-5 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <i class="lucide lucide-plus-circle text-primary-500"></i> 新建届次
+            </h3>
+            <div class="grid grid-cols-2 gap-4 max-w-md">
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">届次（入学年份）*</label>
+                    <input x-model="newCohort.grade" placeholder="如：2028" type="number" class="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">班级 *</label>
+                    <input x-model="newCohort.class_no" placeholder="如：11" class="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300">
+                </div>
+            </div>
+            <button @click="createCohort()" :disabled="!newCohort.grade||!newCohort.class_no"
+                    class="mt-3 px-5 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 disabled:opacity-50">创建届次</button>
+            <p class="text-xs text-gray-400 mt-2">创建后自动生成：七上、七下、八上、八下、九上、九下 六个学期</p>
+        </div>
+
+        {% if cohort %}
+        <!-- 当前届次的学期列表 -->
+        <div class="card p-5 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <i class="lucide lucide-calendar text-primary-500"></i> {{ cohort.display_name }} · 学期列表
+            </h3>
+            <div class="space-y-2">
+                {% for sem in semesters %}
+                <div class="flex items-center justify-between py-3 px-4 rounded-lg border border-gray-100 hover:bg-gray-50"
+                     :class="{'border-primary-200 bg-primary-50/30': {{ sem.id }} == currentSemId}">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                             :class="{{ sem.id }} == currentSemId ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-500'">
+                            {{ loop.index }}
+                        </div>
+                        <div>
+                            <div class="text-sm font-medium">{{ sem.name }}</div>
+                            <div class="text-xs text-gray-400">{{ sem.year_range or '' }}</div>
+                        </div>
+                        {% if semester and sem.id == semester.id %}
+                        <span class="px-2 py-0.5 bg-primary-100 text-primary-600 rounded text-xs font-medium">当前</span>
+                        {% endif %}
+                    </div>
+                    <button x-show="{{ sem.id }} != currentSemId" @click="switchSemester({{ sem.id }})"
+                            class="text-xs text-primary-500 hover:underline px-2 py-1">切换</button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 届次列表 -->
+        <div class="card p-5 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <i class="lucide lucide-layers text-primary-500"></i> 届次列表
+            </h3>
+            <div x-show="!cohorts.length" class="text-center py-6 text-gray-400 text-sm">暂无届次，请先创建</div>
+            <div class="space-y-2">
+                <template x-for="c in cohorts" :key="c.id">
+                    <div class="flex items-center justify-between py-3 px-4 rounded-lg border border-gray-100 hover:bg-gray-50"
+                         :class="{'border-primary-200 bg-primary-50/30': c.id == activeCohortId}">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                                 :class="c.id == activeCohortId ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-500'" x-text="c.class_no"></div>
+                            <div>
+                                <div class="text-sm font-medium" x-text="c.display_name"></div>
+                                <div class="text-xs text-gray-400" x-text="c.notes || ''"></div>
+                            </div>
+                            <span x-show="c.id == activeCohortId" class="px-2 py-0.5 bg-primary-100 text-primary-600 rounded text-xs font-medium">当前</span>
+                        </div>
+                        <div class="flex gap-1">
+                            <button x-show="c.id != activeCohortId" @click="switchCohort(c.id)" class="text-xs text-primary-500 hover:underline px-2 py-1">切换</button>
+                            <button @click="archiveCohort(c)" class="text-xs text-gray-400 hover:text-red-500 px-2 py-1">归档</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <i class="lucide lucide-help-circle text-gray-400"></i> 说明
+            </h3>
+            <div class="text-sm text-gray-500 space-y-2">
+                <p>每个届次包含6个学期（七上→九下），学期间数据独立。</p>
+                <p>通过侧边栏顶部的下拉框可快速切换届次和学期。</p>
+                <p>「入学以来总分」会自动汇总所有学期的积分数据。</p>
+                <p>归档届次不会删除数据，只是隐藏。可以随时恢复。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ AI 配置 ============ -->
+    <div x-show="tab === 'ai'">
+        <h1 class="text-lg font-bold mb-4">AI 配置</h1>
+
+        <div class="card p-5 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <i class="lucide lucide-key text-primary-500"></i> API 密钥配置
+            </h3>
+            <p class="text-xs text-gray-400 mb-4">配置 AI 服务后，首页AI助手可以回答更复杂的自然语言问题，支持数据查询、记录事件、录入积分等操作。</p>
+
+            <div class="space-y-4 max-w-md">
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">AI 服务商</label>
+                    <select x-model="ai.provider" class="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300">
+                        <option value="">不使用外部 AI（当前规则模式）</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div x-show="ai.provider">
+                    <label class="text-xs text-gray-500 block mb-1">API Key</label>
+                    <input x-model="ai.api_key" type="password" placeholder="sk-..." class="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300">
+                </div>
+                <div x-show="ai.provider">
+                    <label class="text-xs text-gray-500 block mb-1">模型名称</label>
+                    <template x-if="ai.provider !== 'custom'">
+                        <select x-model="ai.model" class="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300">
+                            <template x-if="ai.provider === 'openai'">
+                                <optgroup label="OpenAI">
+                                    <option value="gpt-4o-mini">GPT-4o-mini（快速）</option>
+                                    <option value="gpt-4o">GPT-4o（精准）</option>
+                                </optgroup>
+                            </template>
+                            <template x-if="ai.provider === 'deepseek'">
+                                <optgroup label="DeepSeek">
+                                    <option value="deepseek-chat">DeepSeek V3</option>
+                                    <option value="deepseek-reasoner">DeepSeek R1</option>
+                                </optgroup>
+                            </template>
+                        </select>
+                    </template>
+                    <template x-if="ai.provider === 'custom'">
+                        <input x-model="ai.model" placeholder="输入模型名称，如 gpt-4o" class="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300">
+                    </template>
+                </div>
+                <div x-show="ai.provider">
+                    <label class="text-xs text-gray-500 block mb-1">API 地址（自定义服务商必填）</label>
+                    <input x-model="ai.api_url" :placeholder="ai.provider === 'custom' ? 'https://your-api.com/v1/chat/completions' : '留空则使用官方默认地址'" class="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300">
+                </div>
+
+                <button @click="saveAiConfig()" :disabled="aiSaving"
+                        class="px-5 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 disabled:opacity-50 transition-colors">
+                    <span x-show="!aiSaving">保存配置</span>
+                    <span x-show="aiSaving" x-cloak>保存中...</span>
+                </button>
+                <div x-show="aiSaved" x-cloak class="text-sm text-emerald-600 flex items-center gap-1">
+                    <i class="lucide lucide-check"></i> 保存成功
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <i class="lucide lucide-help-circle text-gray-400"></i> 使用说明
+            </h3>
+            <div class="text-sm text-gray-500 space-y-2">
+                <p>配置 AI 后，首页的 AI 助手可以理解更复杂的自然语言描述，例如「帮我找出积分下降的学生」「这周谁进步最大」等。</p>
+                <p>当前未配置时，AI 助手使用规则模式，可以处理固定格式的指令（如「给张三加10分」「积分排名」）。</p>
+                <p>API Key 仅保存在本地数据库中，不会发送到外部。</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function settingsPage() {
+    return {
+        tab: 'cohort',
+        cohorts: [], activeCohortId: '{{ cohort.id if cohort else "" }}',
+        currentSemId: '{{ semester.id if semester else "" }}',
+        newCohort: { grade: '', class_no: '' },
+        ai: { provider: '', api_key: '', model: '', api_url: '' },
+        aiSaving: false,
+        aiSaved: false,
+
+        async load() {
+            this.cohorts = await api.get('/api/cohorts');
+            // 加载AI配置
+            const settings = await api.get('/api/settings');
+            this.ai.provider = settings.ai_provider || '';
+            this.ai.api_key = settings.ai_api_key || '';
+            this.ai.model = settings.ai_model || '';
+            this.ai.api_url = settings.ai_api_url || '';
+        },
+
+        async createCohort() {
+            if (!this.newCohort.grade || !this.newCohort.class_no) { alert('届次和班级必填'); return; }
+            const res = await api.post('/api/cohorts', this.newCohort);
+            if (res.ok) { this.newCohort = {grade:'',class_no:''}; location.reload(); }
+            else alert(res.error || '创建失败');
+        },
+
+        async switchCohort(id) {
+            await api.post('/api/cohorts/active', {cohort_id: id});
+            location.reload();
+        },
+
+        async switchSemester(id) {
+            await api.post('/api/semesters/active', {semester_id: id});
+            location.reload();
+        },
+
+        async archiveCohort(c) {
+            if (!confirm('确定归档 '+c.display_name+'？数据不会丢失。')) return;
+            await api.del('/api/cohorts/' + c.id);
+            location.reload();
+        },
+
+        async saveAiConfig() {
+            this.aiSaving = true;
+            this.aiSaved = false;
+            const res = await api.post('/api/settings', {
+                ai_provider: this.ai.provider,
+                ai_api_key: this.ai.api_key,
+                ai_model: this.ai.model,
+                ai_api_url: this.ai.api_url,
+            });
+            this.aiSaving = false;
+            if (res.ok) { this.aiSaved = true; setTimeout(() => this.aiSaved = false, 2000); }
+            else alert('保存失败');
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block nav_ai %}nav-active{% endblock %}
+{% block tab_ai %}text-primary-500{% endblock %}
+{% block mobile_title %}AI 对话{% endblock %}
+
+{% block content %}
+<div x-data="aiChat()" x-init="load()" class="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-5rem)]">
+    <!-- 头部 -->
+    <div class="flex items-center gap-2 mb-3 shrink-0">
+        <div class="w-7 h-7 bg-gradient-to-br from-primary-400 to-primary-600 rounded-lg flex items-center justify-center">
+            <i class="lucide lucide-sparkles text-white text-xs"></i>
+        </div>
+        <h1 class="text-lg font-bold">AI 对话</h1>
+        <span class="text-xs text-gray-400">阿悟帮你管理班级数据</span>
+        <div class="ml-auto flex gap-2">
+            <button @click="clearHistory()" class="text-xs text-gray-400 hover:text-red-500 px-2 py-1">清空对话</button>
+            <span class="text-xs text-gray-300 mt-auto mb-1" x-text="'共 ' + messages.length + ' 条'"></span>
+        </div>
+    </div>
+
+    <!-- 消息列表 -->
+    <div class="flex-1 overflow-y-auto space-y-3 mb-3 pr-1" x-ref="chatMessages" id="chatMessages">
+        <!-- 空状态提示 -->
+        <div x-show="!messages.length && !loading" class="text-center py-10">
+            <div class="w-12 h-12 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <i class="lucide lucide-sparkles text-primary-500 text-xl"></i>
+            </div>
+            <p class="text-sm text-gray-500 mb-1">我是阿悟，你的AI班主任助手</p>
+            <p class="text-xs text-gray-400 mb-4">可以问我班级数据，或让我帮你记录事件、录入积分</p>
+            <div class="flex flex-wrap gap-2 justify-center">
+                <button @click="send('班级有多少人')" class="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-full text-xs text-gray-600">班级有多少人</button>
+                <button @click="send('积分排名')" class="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-full text-xs text-gray-600">积分排名</button>
+                <button @click="send('给高成硕加10分')" class="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-full text-xs text-gray-600">给高成硕加10分</button>
+                <button @click="send('记录高成硕违纪：上课说话')" class="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-full text-xs text-gray-600">记录违纪</button>
+            </div>
+        </div>
+
+        <!-- 对话消息 -->
+        <template x-for="(msg, i) in messages" :key="i">
+            <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                <div :class="msg.role === 'user'
+                    ? 'bg-primary-500 text-white rounded-2xl rounded-tr-sm'
+                    : 'bg-gray-100 text-gray-700 rounded-2xl rounded-tl-sm'"
+                    class="px-4 py-2.5 text-sm max-w-[85%] md:max-w-[70%] whitespace-pre-wrap leading-relaxed" x-html="renderMarkdown(msg.content)">
+                </div>
+            </div>
+        </template>
+
+        <!-- 思考中 -->
+        <div x-show="loading" class="flex justify-start">
+            <div class="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm text-gray-400 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+                <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+                <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 输入区 -->
+    <div class="shrink-0 bg-white border border-gray-200 rounded-xl p-2 flex flex-col gap-2">
+        <!-- 已选文件提示 -->
+        <div x-show="pendingFile" x-cloak class="flex items-center gap-2 px-2 py-1 bg-primary-50 border border-primary-200 rounded-lg text-xs">
+            <i class="lucide lucide-file-text text-primary-500"></i>
+            <span class="flex-1 truncate text-primary-700" x-text="pendingFile?.name || ''"></span>
+            <button @click="pendingFile = null" class="text-gray-400 hover:text-red-500 shrink-0">
+                <i class="lucide lucide-x text-sm"></i>
+            </button>
+        </div>
+
+        <div class="flex gap-2 items-end">
+            <!-- 附件按钮 -->
+            <button @click="$refs.fileInput.click()" :disabled="loading"
+                    class="px-3 py-2.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 border border-gray-200 hover:border-primary-300 rounded-lg transition-colors shrink-0 self-end flex items-center gap-1.5"
+                    :class="{'border-primary-400 bg-primary-50': pendingFile, 'opacity-40': loading}"
+                    title="上传 Excel 文件（成绩 / 积分 / 学生信息）">
+                <i class="lucide lucide-paperclip text-xl"></i>
+                <span class="text-xs hidden sm:inline">上传文件</span>
+            </button>
+            <input type="file" x-ref="fileInput" accept=".xlsx,.xls"
+                   class="hidden" @change="selectFile($event)">
+
+            <textarea x-model="input" @keydown.enter.prevent="send(input)"
+                      placeholder="输入消息，回车发送…"
+                      class="flex-1 border-0 px-2 py-1 text-sm focus:outline-none resize-none max-h-32"
+                      rows="1" :disabled="loading"
+                      @input="$el.style.height = 'auto'; $el.style.height = Math.min($el.scrollHeight, 128) + 'px'">
+            </textarea>
+            <button @click="send(input)" :disabled="loading || (!input.trim() && !pendingFile)"
+                    class="px-4 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 disabled:opacity-40 transition-colors shrink-0">
+                发送
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function aiChat() {
+    return {
+        messages: [],
+        input: '',
+        loading: false,
+        pendingFile: null,
+        STORAGE_KEY: 'ai_chat_history',
+
+        load() {
+            // 从 localStorage 恢复历史
+            try {
+                const saved = localStorage.getItem(this.STORAGE_KEY);
+                if (saved) this.messages = JSON.parse(saved);
+            } catch (e) {}
+        },
+
+        saveHistory() {
+            try {
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.messages.slice(-50)));
+            } catch (e) {}
+        },
+
+        clearHistory() {
+            if (this.messages.length === 0) return;
+            if (!confirm('确定清空所有对话记录？')) return;
+            this.messages = [];
+            localStorage.removeItem(this.STORAGE_KEY);
+        },
+
+        renderMarkdown(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                .replace(/\n/g, '<br>');
+        },
+
+        async send(text) {
+            const msg = (text || this.input || '').trim();
+            if (!msg && !this.pendingFile) return;
+            if (this.loading) return;
+
+            if (this.pendingFile) {
+                // ── 有文件：文件和文字一起上传 ──
+                const fileName = this.pendingFile.name;
+                const file = this.pendingFile;
+                this.pendingFile = null;
+                this.input = '';
+                this.messages.push({role: 'user', content: `📎 ${fileName}` + (msg ? `\n${msg}` : '')});
+                this.loading = true;
+                this.scrollToBottom();
+                this.saveHistory();
+
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    if (msg) formData.append('message', msg);
+
+                    const res = await fetch('/api/chat/upload', {
+                        method: 'POST', body: formData
+                    });
+                    const data = await res.json();
+                    this.messages.push({role: 'assistant', content: data.reply || '文件处理完成'});
+                    this.saveHistory();
+                    if (data.actions && data.actions.length) {
+                        if (window.dashboardInstance) window.dashboardInstance.load();
+                    }
+                } catch (e) {
+                    this.messages.push({role: 'assistant', content: '⚠️ 文件上传出错：' + (e.message || '请重试')});
+                    this.saveHistory();
+                }
+                this.loading = false;
+                this.scrollToBottom();
+            } else {
+                // ── 无文件：正常聊天 ──
+                this.input = '';
+                this.messages.push({role: 'user', content: msg});
+                this.loading = true;
+                this.scrollToBottom();
+                this.saveHistory();
+
+                try {
+                    const res = await api.post('/api/chat', {
+                        message: msg,
+                        messages: this.messages.slice(0, -1)
+                    });
+                    this.messages.push({role: 'assistant', content: res.reply || '（无回复）'});
+                    this.saveHistory();
+                    if (res.actions && res.actions.length) {
+                        if (window.dashboardInstance) window.dashboardInstance.load();
+                    }
+                } catch (e) {
+                    this.messages.push({role: 'assistant', content: '网络错误，请重试'});
+                }
+                this.loading = false;
+                this.scrollToBottom();
+            }
+        },
+
+        selectFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            event.target.value = '';
+
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                this.messages.push({role: 'assistant', content: '⚠️ 仅支持 Excel 文件（.xlsx / .xls）'});
+                this.saveHistory();
+                return;
+            }
+
+            this.pendingFile = file;
+        },
+
+        scrollToBottom() {
+            this.$nextTick(() => {
+                const el = this.$refs.chatMessages;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        }
+    };
+}
+</script>
+{% endblock %}

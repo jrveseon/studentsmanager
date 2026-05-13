@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block nav_scores %}nav-active{% endblock %}
+{% block tab_scores %}text-primary-500{% endblock %}
+{% block mobile_title %}成绩管理{% endblock %}
+
+{% block content %}
+<div x-data="scoresPage()" x-init="load()">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <h1 class="text-lg font-bold">成绩管理</h1>
+        <div class="flex gap-2">
+            <select x-model="selectedExam" @change="loadScores()" class="border border-gray-200 px-3 py-1.5 text-sm focus:outline-none">
+                <option value="">选择考试</option>
+                <template x-for="e in exams" :key="e.id">
+                    <option :value="e.id" x-text="e.name"></option>
+                </template>
+            </select>
+            <button @click="showNewExam = true" class="px-3 py-1.5 bg-emerald-500 text-white text-sm rounded-lg hover:bg-emerald-600">+ 新建考试</button>
+            <button @click="showExamManager = true" class="px-3 py-1.5 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">考试管理</button>
+            <button @click="showEntry = true" :disabled="!selectedExam" class="px-3 py-1.5 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 disabled:opacity-40">录入成绩</button>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div x-show="selectedExam" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <template x-for="stat in classStats" :key="stat.subject">
+            <div class="card p-3">
+                <div class="text-xs text-gray-400" x-text="stat.subject"></div>
+                <div class="text-lg font-bold mt-1" x-text="stat.avg_score"></div>
+                <div class="text-xs text-gray-400">均分 · 及格率 <span x-text="stat.count ? Math.round(stat.pass_count/stat.count*100) + '%' : '-'"></span></div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 排名表 -->
+    <div x-show="selectedExam" class="card mb-4">
+        <div class="table-container">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-500 border-b border-gray-100">
+                        <th class="px-3 py-3 w-10">名次</th>
+                        <th class="px-3 py-3">姓名</th>
+                        <template x-for="subj in subjectList" :key="subj">
+                            <th class="px-3 py-3 text-right" x-text="subj"></th>
+                        </template>
+                        <th class="px-3 py-3 text-right font-semibold">总分</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(r, i) in ranking" :key="r.student_id">
+                        <tr class="border-b border-gray-50 hover:bg-gray-50">
+                            <td class="px-3 py-2">
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
+                                      :class="(i+1)<=3 ? 'bg-amber-100 text-amber-700' : 'text-gray-500'" x-text="i+1"></span>
+                            </td>
+                            <td class="px-3 py-2">
+                                <a :href="'/students/' + r.student_id" class="text-primary-600 hover:underline" x-text="r.name"></a>
+                            </td>
+                            <template x-for="subj in subjectList" :key="subj">
+                                <td class="px-3 py-2 text-right text-gray-600" x-text="getScore(r.student_id, subj) || '-'"></td>
+                            </template>
+                            <td class="px-3 py-2 text-right font-semibold text-emerald-600" x-text="r.total_score"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div x-show="!ranking.length" class="text-center py-8 text-gray-400 text-sm">暂无成绩数据</div>
+    </div>
+
+    <!-- 新建考试模态框 -->
+    <div x-show="showNewExam" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showNewExam = false">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-5">
+            <h3 class="text-base font-semibold mb-4">新建考试</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-gray-500">考试名称 <span class="text-red-400">*</span></label>
+                    <input x-model="newExam.name" placeholder="如：七下期中考试"
+                           :class="errors.name ? 'border-red-400 bg-red-50 focus:ring-red-300' : 'border-gray-200 focus:ring-primary-300'"
+                           class="w-full border px-3 py-1.5 text-sm mt-0.5 focus:outline-none focus:ring-2">
+                    <div x-show="errors.name" x-cloak class="text-xs text-red-500 mt-1" x-text="errors.name"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-500">考试类型</label>
+                        <select x-model="newExam.exam_type" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none focus:ring-2 focus:ring-primary-300">
+                            <option>期中</option><option>期末</option><option>周测</option><option>月考</option><option>其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">考试日期</label>
+                        <input x-model="newExam.exam_date" type="date" class="w-full border border-gray-200 px-3 py-1.5 text-sm mt-0.5 focus:outline-none">
+                    </div>
+                </div>
+            <div>
+                <label class="text-xs text-gray-500">关联学期</label>
+                <select x-model="newExam.semester_id"
+                        :class="errors.semester_id ? 'border-red-400 bg-red-50 focus:ring-red-300' : 'border-gray-200 focus:ring-primary-300'"
+                        class="w-full border px-3 py-1.5 text-sm mt-0.5 focus:outline-none focus:ring-2">
+                    <option value="">请选择学期</option>
+                    <template x-for="s in semesters" :key="s.id">
+                        <option :value="s.id" x-text="s.name + ' (' + (s.year_range||'') + ')'"></option>
+                    </template>
+                </select>
+                <div x-show="errors.semester_id" x-cloak class="text-xs text-red-500 mt-1" x-text="errors.semester_id"></div>
+            </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button @click="showNewExam = false; errors = {}" class="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">取消</button>
+                <button @click="createExam()" class="px-4 py-1.5 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 考试管理模态框 -->
+    <div x-show="showExamManager" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showExamManager = false">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-5 max-h-[75vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-semibold">考试管理</h3>
+                <button @click="showExamManager = false" class="text-gray-400 hover:text-gray-600">
+                    <i class="lucide lucide-x text-lg"></i>
+                </button>
+            </div>
+            <div x-show="!exams.length" class="text-center py-8 text-gray-400 text-sm">暂无考试记录</div>
+            <div class="space-y-2">
+                <template x-for="e in exams" :key="e.id">
+                    <div class="flex items-center justify-between py-2.5 px-3 rounded-lg border border-gray-100 hover:bg-gray-50">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium" x-text="e.name"></div>
+                            <div class="text-xs text-gray-400" x-text="(e.exam_type || '') + (e.exam_date ? ' · ' + e.exam_date : '') + (e.semester_name ? ' · ' + e.semester_name : '')"></div>
+                        </div>
+                        <button @click="deleteExam(e)" class="text-xs text-red-500 hover:text-red-700 hover:underline shrink-0 ml-2 px-2 py-1">删除</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- 录入成绩模态框 -->
+    <div x-show="showEntry" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showEntry = false">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-3xl mx-4 p-5 max-h-[85vh] overflow-y-auto">
+            <h3 class="text-base font-semibold mb-1">录入成绩</h3>
+            <div class="text-xs text-gray-400 mb-4" x-text="'当前考试：' + (exams.find(e => e.id == selectedExam)?.name || '')"></div>
+
+            <!-- 模式切换 -->
+            <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-lg w-fit">
+                <button @click="entryMode = 'manual'" :class="entryMode==='manual' ? 'bg-white shadow text-gray-800' : 'text-gray-500'" class="px-3 py-1 text-xs rounded-md">手动录入</button>
+                <button @click="entryMode = 'file'" :class="entryMode==='file' ? 'bg-white shadow text-gray-800' : 'text-gray-500'" class="px-3 py-1 text-xs rounded-md">上传文件</button>
+            </div>
+
+            <!-- 手动录入 -->
+            <div x-show="entryMode === 'manual'">
+                <div class="mb-3">
+                    <label class="text-xs text-gray-500">科目</label>
+                    <input x-model="entrySubject" placeholder="如：语文" class="border border-gray-200 px-3 py-1.5 text-sm mt-0.5 ml-2">
+                </div>
+                <div class="table-container mb-4">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-xs text-gray-500">
+                                <th class="px-2 py-2">姓名</th>
+                                <th class="px-2 py-2 w-24">分数</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="s in allStudents" :key="s.id">
+                                <tr class="border-t border-gray-50">
+                                    <td class="px-2 py-1.5" x-text="s.name"></td>
+                                    <td class="px-2 py-1.5">
+                                        <input type="number" x-model.number="entryScores[s.id]" class="w-full border border-gray-200 px-2 py-1 text-sm" placeholder="-">
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button @click="showEntry = false; parsedFileData = null" class="px-4 py-1.5 text-sm text-gray-500 rounded-lg">取消</button>
+                    <button @click="submitScores()" class="px-4 py-1.5 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600">保存</button>
+                </div>
+            </div>
+
+            <!-- 上传文件模式 -->
+            <div x-show="entryMode === 'file'">
+                <div class="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center hover:border-primary-300 transition-colors mb-3">
+                    <i class="lucide lucide-upload-cloud text-2xl text-gray-400 mb-2"></i>
+                    <p class="text-sm text-gray-500 mb-2">上传成绩表（.xlsx / .xls）</p>
+                    <p class="text-xs text-gray-400 mb-2">第一列为姓名，其余列为各科分数</p>
+                    <a href="/import/template/scores" class="text-xs text-primary-500 hover:underline mb-3 inline-block">下载模板</a>
+                    <input type="file" accept=".xlsx,.xls" @change="parseFile($event)" class="text-sm text-gray-500" id="entryFileInput">
+                </div>
+
+                <div x-show="parsedFileData" class="mb-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-sm text-emerald-600" x-text="'解析到 ' + (parsedFileData?.total_names||0) + ' 名学生'"></span>
+                        <span x-show="parsedFileData?.unmatched?.length" class="text-xs text-amber-500" x-text="'未匹配: ' + (parsedFileData?.unmatched||[]).join('、')"></span>
+                    </div>
+                    <div class="table-container">
+                        <table class="w-full text-xs">
+                            <thead>
+                                <tr class="bg-gray-50">
+                                    <th class="px-2 py-1 text-left font-medium text-gray-600">姓名</th>
+                                    <template x-for="subj in (parsedFileData?.subjects||[])" :key="subj">
+                                        <th class="px-2 py-1 text-right font-medium text-gray-600" x-text="subj"></th>
+                                    </template>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(r, i) in (parsedFileData?.data||[]).slice(0,10)" :key="i">
+                                    <tr class="border-t border-gray-100">
+                                        <td class="px-2 py-1 text-gray-700 font-medium" x-text="r.name"></td>
+                                        <template x-for="subj in (parsedFileData?.subjects||[])" :key="subj">
+                                            <td class="px-2 py-1 text-right text-gray-600" x-text="r.scores[subj] ?? '-'"></td>
+                                        </template>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div x-show="(parsedFileData?.data||[]).length > 10" class="text-xs text-gray-400 text-center mt-1">... 共 (parsedFileData.data.length) 名学生</div>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button @click="showEntry = false; parsedFileData = null" class="px-4 py-1.5 text-sm text-gray-500 rounded-lg">取消</button>
+                    <button x-show="parsedFileData" @click="submitParsedFile()" class="px-4 py-1.5 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600">确认导入</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function scoresPage() {
+    return {
+        exams: [], selectedExam: '',
+        ranking: [], scores: [], classStats: [], subjectList: [],
+        allStudents: [],
+        semesters: [],
+        currentSemName: '{{ semester.name if semester else "" }}',
+        activeSemId: {{ semester.id if semester else "null" }},
+        showNewExam: false, showExamManager: false,
+        newExam: {name:'', exam_type:'期中', exam_date:'', semester_id: {{ semester.id if semester else "''" }}},
+        showNewExam: false, showExamManager: false, showEntry: false,
+        entryMode: 'manual', entrySubject: '', entryScores: {}, parsedFileData: null, parsedFile: null,
+        errors: {},
+        async load() {
+            this.exams = await api.get('/api/exams');
+            this.allStudents = await api.get('/api/students');
+            this.semesters = await api.get('/api/semesters');
+        },
+        async loadScores() {
+            if (!this.selectedExam) return;
+            this.ranking = await api.get('/api/scores/ranking?exam_id=' + this.selectedExam);
+            this.scores = await api.get('/api/scores?exam_id=' + this.selectedExam);
+            this.classStats = await api.get('/api/scores/class_stats?exam_id=' + this.selectedExam);
+            this.subjectList = [...new Set(this.scores.map(s => s.subject))];
+        },
+        getScore(studentId, subject) {
+            const s = this.scores.find(x => x.student_id === studentId && x.subject === subject);
+            return s ? s.score : null;
+        },
+        async createExam() {
+            this.errors = {};
+            let valid = true;
+            if (!this.newExam.name.trim()) { this.errors.name = '请输入考试名称'; valid = false; }
+            if (!this.newExam.semester_id && this.newExam.semester_id !== 0) { this.errors.semester_id = '请选择关联学期'; valid = false; }
+            if (!valid) return;
+            const res = await api.post('/api/exams', this.newExam);
+            if (res.ok) { this.showNewExam = false; this.errors = {}; this.exams = await api.get('/api/exams'); this.newExam = {name:'', exam_type:'期中', exam_date:'', semester_id: this.activeSemId}; }
+        },
+        async deleteExam(e) {
+            if (!confirm('确定删除考试「' + e.name + '」？\n该考试的成绩数据也将被删除。')) return;
+            const res = await api.del('/api/exams/' + e.id);
+            if (res.ok) {
+                this.exams = await api.get('/api/exams');
+                if (this.selectedExam == e.id) { this.selectedExam = ''; this.ranking = []; this.scores = []; this.classStats = []; this.subjectList = []; }
+            }
+        },
+        async submitScores() {
+            if (!this.entrySubject) { alert('请填写科目'); return; }
+            const records = Object.entries(this.entryScores)
+                .filter(([_, v]) => v !== '' && v !== undefined && v !== null)
+                .map(([sid, score]) => ({student_id: parseInt(sid), subject: this.entrySubject, score: parseFloat(score)}));
+            if (!records.length) { alert('请至少填写一条成绩'); return; }
+            const res = await api.post('/api/scores', {exam_id: parseInt(this.selectedExam), records});
+            if (res.ok) { this.showEntry = false; this.entryScores = {}; this.loadScores(); }
+        },
+
+        async parseFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            this.parsedFile = file;
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const res = await fetch('/api/import/preview', {method: 'POST', body: fd});
+                const preview = await res.json();
+                if (!preview.ok) { alert(preview.error || '解析失败'); return; }
+                const sheet = preview.sheets?.[0];
+                if (sheet) {
+                    const header = sheet.header;
+                    const nameIdx = header.findIndex(h => h.includes('姓名'));
+                    const subjects = header.filter((h, i) => i !== nameIdx && h && !['排名','班次','总分','序号','学号'].includes(h));
+                    const data = sheet.sample.map(row => ({
+                        name: row[nameIdx] || '',
+                        scores: Object.fromEntries(subjects.map(s => {
+                            const colIdx = header.findIndex(h => h === s);
+                            return [s, parseFloat(row[colIdx]) || null];
+                        }))
+                    }));
+                    this.parsedFileData = {subjects, data, total_names: sheet.rows - 1};
+                }
+            } catch (err) {
+                alert('解析失败: ' + err.message);
+            }
+        },
+
+        async submitParsedFile() {
+            if (!this.selectedExam || !this.parsedFile) return;
+            const fd = new FormData();
+            fd.append('file', this.parsedFile);
+            fd.append('exam_id', this.selectedExam);
+            const res = await fetch('/api/scores/import_file', {method: 'POST', body: fd});
+            const data = await res.json();
+            if (data.ok) {
+                this.showEntry = false; this.parsedFileData = null; this.parsedFile = null;
+                this.loadScores();
+            } else {
+                alert(data.error || '导入失败');
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

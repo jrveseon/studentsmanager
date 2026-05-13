@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block nav_import %}nav-active{% endblock %}
+{% block mobile_title %}数据导入{% endblock %}
+
+{% block content %}
+<div x-data="importPage()">
+    <h1 class="text-lg font-bold mb-4">数据导入</h1>
+    <p class="text-sm text-gray-500 mb-6">从Excel文件导入历史数据。支持 .xlsx 和 .xls 格式。</p>
+
+    <div class="grid md:grid-cols-3 gap-4">
+        <!-- 导入学生信息 -->
+        <div class="card p-5">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><i class="lucide lucide-users text-blue-500"></i></div>
+                <h3 class="font-semibold text-sm">学生信息</h3>
+            </div>
+            <p class="text-xs text-gray-400 mb-3">导入学生基本信息（姓名、性别、身份证号等）</p>
+            <a href="/import/template/students" class="inline-flex items-center gap-1 text-xs text-primary-500 hover:underline mb-2">
+                <i class="lucide lucide-download text-xs"></i> 下载模板
+            </a>
+            <input type="file" accept=".xlsx,.xls" @change="handleFile($event, 'students')" class="text-sm text-gray-500 mb-2 w-full">
+            <div x-show="importing === 'students'" class="text-sm text-primary-500 animate-pulse">导入中...</div>
+            <div x-show="result.students" class="text-sm text-emerald-600" x-text="result.students"></div>
+            <div x-show="error.students" class="text-sm text-red-500" x-text="error.students"></div>
+        </div>
+
+        <!-- 导入积分数据 -->
+        <div class="card p-5">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center"><i class="lucide lucide-star text-amber-500"></i></div>
+                <h3 class="font-semibold text-sm">量化积分</h3>
+            </div>
+            <p class="text-xs text-gray-400 mb-3">导入每周积分汇总表。每个Sheet为一周，或总表形式。</p>
+            <a href="/import/template/points" class="inline-flex items-center gap-1 text-xs text-primary-500 hover:underline mb-2">
+                <i class="lucide lucide-download text-xs"></i> 下载模板
+            </a>
+            <div class="mb-2">
+                <label class="text-xs text-gray-500">学期</label>
+                <input x-model="pointsSemester" placeholder="如：2025-2026七下" class="w-full border border-gray-200 px-2 py-1 text-sm mt-0.5">
+            </div>
+            <input type="file" accept=".xlsx,.xls" @change="handleFile($event, 'points')" class="text-sm text-gray-500 mb-2 w-full">
+            <div x-show="importing === 'points'" class="text-sm text-primary-500 animate-pulse">导入中...</div>
+            <div x-show="result.points" class="text-sm text-emerald-600" x-text="result.points"></div>
+            <div x-show="error.points" class="text-sm text-red-500" x-text="error.points"></div>
+        </div>
+
+        <!-- 导入成绩 -->
+        <div class="card p-5">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center"><i class="lucide lucide-graduation-cap text-emerald-500"></i></div>
+                <h3 class="font-semibold text-sm">考试成绩</h3>
+            </div>
+            <p class="text-xs text-gray-400 mb-3">导入成绩汇总表。第一列姓名，后面各列为科目分数。</p>
+            <a href="/import/template/scores" class="inline-flex items-center gap-1 text-xs text-primary-500 hover:underline mb-2">
+                <i class="lucide lucide-download text-xs"></i> 下载模板
+            </a>
+            <div class="mb-2 space-y-1.5">
+                <div>
+                    <label class="text-xs text-gray-500">考试名称</label>
+                    <input x-model="scoreExamName" placeholder="如：七上期末" class="w-full border border-gray-200 px-2 py-1 text-sm mt-0.5">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-gray-500">类型</label>
+                        <select x-model="scoreExamType" class="w-full border border-gray-200 px-2 py-1 text-sm mt-0.5">
+                            <option>期末</option><option>期中</option><option>周测</option><option>月考</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">学期</label>
+                        <input x-model="scoreSemester" placeholder="2025-2026七上" class="w-full border border-gray-200 px-2 py-1 text-sm mt-0.5">
+                    </div>
+                </div>
+            </div>
+            <input type="file" accept=".xlsx,.xls" @change="handleFile($event, 'scores')" class="text-sm text-gray-500 mb-2 w-full">
+            <div x-show="importing === 'scores'" class="text-sm text-primary-500 animate-pulse">导入中...</div>
+            <div x-show="result.scores" class="text-sm text-emerald-600" x-text="result.scores"></div>
+            <div x-show="error.scores" class="text-sm text-red-500" x-text="error.scores"></div>
+        </div>
+    </div>
+
+    <!-- 预览 -->
+    <div x-show="preview" class="card p-5 mt-4">
+        <h3 class="font-semibold text-sm mb-3">文件预览：<span x-text="previewName" class="text-gray-500"></span></h3>
+        <template x-for="sheet in preview?.sheets || []" :key="sheet.name">
+            <div class="mb-4">
+                <div class="text-xs font-medium text-gray-500 mb-1" x-text="'Sheet: ' + sheet.name + ' (' + sheet.rows + '行)'"></div>
+                <div class="table-container">
+                    <table class="w-full text-xs">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <template x-for="(h, i) in sheet.header" :key="i">
+                                    <th class="px-2 py-1 text-left font-medium text-gray-600" x-text="h"></th>
+                                </template>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(row, ri) in sheet.sample" :key="ri">
+                                <tr class="border-t border-gray-100">
+                                    <template x-for="(cell, ci) in row" :key="ci">
+                                        <td class="px-2 py-1 text-gray-500" x-text="cell"></td>
+                                    </template>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function importPage() {
+    return {
+        importing: '', result: {}, error: {},
+        preview: null, previewName: '',
+        pointsSemester: '', scoreExamName: '', scoreExamType: '期末', scoreSemester: '',
+        async handleFile(e, type) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('file', file);
+
+            // 先预览
+            try {
+                const pv = await fetch('/api/import/preview', {method: 'POST', body: fd});
+                const pvData = await pv.json();
+                if (pvData.ok) { this.preview = pvData; this.previewName = file.name; }
+            } catch {}
+
+            this.importing = type; this.result[type] = ''; this.error[type] = '';
+            const fd2 = new FormData();
+            fd2.append('file', file);
+
+            try {
+                let url = '/api/import/' + type;
+                if (type === 'points') {
+                    fd2.append('semester', this.pointsSemester);
+                } else if (type === 'scores') {
+                    fd2.append('exam_name', this.scoreExamName || file.name.replace(/\.\w+$/, ''));
+                    fd2.append('exam_type', this.scoreExamType);
+                    fd2.append('semester', this.scoreSemester);
+                }
+                const res = await fetch(url, {method: 'POST', body: fd2});
+                const data = await res.json();
+                if (data.ok) {
+                    this.result[type] = data.message || ('导入成功！共 ' + data.count + ' 条记录');
+                } else {
+                    this.error[type] = data.error || '导入失败';
+                }
+            } catch (err) {
+                this.error[type] = '网络错误: ' + err.message;
+            }
+            this.importing = '';
+        }
+    };
+}
+</script>
+{% endblock %}

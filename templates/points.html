@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block nav_points %}nav-active{% endblock %}
+{% block tab_points %}text-primary-500{% endblock %}
+{% block mobile_title %}积分管理{% endblock %}
+
+{% block content %}
+<div x-data="pointsPage()" x-init="load()">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <h1 class="text-lg font-bold">积分管理</h1>
+        <button @click="showEntry = true" class="px-3 py-1.5 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600">+ 录入积分</button>
+    </div>
+
+    <!-- Tab切换 -->
+    <div class="flex gap-1 mb-4 bg-gray-100 p-1 rounded-lg w-fit flex-wrap">
+        <button @click="view='alltime'" :class="view==='alltime'?'bg-white shadow text-gray-800':'text-gray-500'" class="px-3 py-1.5 text-sm rounded-md">入学以来</button>
+        <button @click="view='semester';loadSemesterSummary()" :class="view==='semester'?'bg-white shadow text-gray-800':'text-gray-500'" class="px-3 py-1.5 text-sm rounded-md">学期总分</button>
+        <button @click="view='weekly';loadWeeklySummary()" :class="view==='weekly'?'bg-white shadow text-gray-800':'text-gray-500'" class="px-3 py-1.5 text-sm rounded-md">本周分数</button>
+        <button @click="view='trend'" :class="view==='trend'?'bg-white shadow text-gray-800':'text-gray-500'" class="px-3 py-1.5 text-sm rounded-md">趋势</button>
+        <button @click="view='group';loadGroupSummary()" :class="view==='group'?'bg-white shadow text-gray-800':'text-gray-500'" class="px-3 py-1.5 text-sm rounded-md">小组</button>
+    </div>
+
+    <!-- ========== 入学以来总分 ========== -->
+    <div x-show="view==='alltime'">
+        <div class="text-sm text-gray-500 mb-3">所有学期累计积分排名</div>
+        <div class="card">
+            <div class="table-container">
+                <table class="w-full text-sm">
+                    <thead><tr class="text-left text-xs text-gray-500 border-b border-gray-100">
+                        <th class="px-4 py-3 w-12">排名</th><th class="px-4 py-3">姓名</th><th class="px-4 py-3">小组</th><th class="px-4 py-3 text-right">累计总分</th>
+                    </tr></thead>
+                    <tbody>
+                        <template x-for="s in allTimeSummary" :key="s.id">
+                            <tr class="border-b border-gray-50 hover:bg-gray-50" :class="{'bg-red-50/50':s.rank>allTimeSummary.length-5}">
+                                <td class="px-4 py-2.5"><span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold" :class="s.rank<=3?'bg-amber-100 text-amber-700':'text-gray-500'" x-text="s.rank"></span></td>
+                                <td class="px-4 py-2.5"><a :href="'/students/'+s.id" class="text-primary-600 hover:underline" x-text="s.name"></a></td>
+                                <td class="px-4 py-2.5 text-gray-500" x-text="s.group_name||'-'"></td>
+                                <td class="px-4 py-2.5 text-right font-semibold" :class="s.total_score>=0?'text-emerald-600':'text-red-500'" x-text="s.total_score"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div x-show="!allTimeSummary.length" class="text-center py-8 text-gray-400 text-sm">暂无积分数据</div>
+        </div>
+    </div>
+
+    <!-- ========== 学期总分 ========== -->
+    <div x-show="view==='semester'">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="text-sm text-gray-500" x-text="currentSemName + ' 学期积分排名'"></span>
+        </div>
+        <div class="card">
+            <div class="table-container">
+                <table class="w-full text-sm">
+                    <thead><tr class="text-left text-xs text-gray-500 border-b border-gray-100">
+                        <th class="px-4 py-3 w-12">排名</th><th class="px-4 py-3">姓名</th><th class="px-4 py-3">小组</th><th class="px-4 py-3 text-right">学期总分</th><th class="px-4 py-3 text-right">周数</th>
+                    </tr></thead>
+                    <tbody>
+                        <template x-for="s in semesterSummary" :key="s.id">
+                            <tr class="border-b border-gray-50 hover:bg-gray-50" :class="{'bg-red-50/50':s.rank>semesterSummary.length-5}">
+                                <td class="px-4 py-2.5"><span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold" :class="s.rank<=3?'bg-amber-100 text-amber-700':'text-gray-500'" x-text="s.rank"></span></td>
+                                <td class="px-4 py-2.5"><a :href="'/students/'+s.id" class="text-primary-600 hover:underline" x-text="s.name"></a></td>
+                                <td class="px-4 py-2.5 text-gray-500" x-text="s.group_name||'-'"></td>
+                                <td class="px-4 py-2.5 text-right font-semibold" :class="s.total_score>=0?'text-emerald-600':'text-red-500'" x-text="s.total_score"></td>
+                                <td class="px-4 py-2.5 text-right text-gray-400" x-text="s.week_count"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div x-show="!semesterSummary.length" class="text-center py-8 text-gray-400 text-sm">暂无数据</div>
+        </div>
+    </div>
+
+    <!-- ========== 本周分数 ========== -->
+    <div x-show="view==='weekly'">
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+            <select x-model.number="weekNum" @change="loadWeeklySummary()" class="border border-gray-200 px-3 py-1.5 text-sm focus:outline-none">
+                <option value="">选择周次</option>
+                <template x-for="w in weekList" :key="w.week_num"><option :value="w.week_num" x-text="'第'+w.week_num+'周'"></option></template>
+            </select>
+            <span class="text-sm text-gray-500" x-show="weekNum" x-text="'第'+weekNum+'周 单周积分排名'"></span>
+        </div>
+        <div class="card">
+            <div class="table-container">
+                <table class="w-full text-sm">
+                    <thead><tr class="text-left text-xs text-gray-500 border-b border-gray-100">
+                        <th class="px-4 py-3 w-12">排名</th><th class="px-4 py-3">姓名</th><th class="px-4 py-3">小组</th><th class="px-4 py-3 text-right">本周积分</th>
+                    </tr></thead>
+                    <tbody>
+                        <template x-for="s in weeklySummary" :key="s.id">
+                            <tr class="border-b border-gray-50 hover:bg-gray-50" :class="{'bg-red-50/50':s.rank>weeklySummary.length-5}">
+                                <td class="px-4 py-2.5"><span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold" :class="s.rank<=3?'bg-amber-100 text-amber-700':'text-gray-500'" x-text="s.rank"></span></td>
+                                <td class="px-4 py-2.5"><a :href="'/students/'+s.id" class="text-primary-600 hover:underline" x-text="s.name"></a></td>
+                                <td class="px-4 py-2.5 text-gray-500" x-text="s.group_name||'-'"></td>
+                                <td class="px-4 py-2.5 text-right font-semibold" :class="s.week_score>=0?'text-emerald-600':'text-red-500'" x-text="s.week_score"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div x-show="!weeklySummary.length" class="text-center py-8 text-gray-400 text-sm"><span x-show="!weekNum">请先选择周次</span><span x-show="weekNum">暂无数据</span></div>
+        </div>
+    </div>
+
+    <!-- ========== 趋势 ========== -->
+    <div x-show="view==='trend'">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="text-sm text-gray-500">选择学生查看积分变化趋势（最多10人）</span>
+        </div>
+        <div class="card p-4">
+            <div class="flex flex-wrap gap-1.5 mb-3">
+                <template x-for="s in allTimeSummary.slice(0,15)" :key="s.id">
+                    <button @click="toggleTrend(s.id)" :class="trendIds.includes(s.id)?'bg-primary-500 text-white':'bg-gray-100 text-gray-600'" class="px-2 py-1 rounded text-xs" x-text="s.name"></button>
+                </template>
+            </div>
+            <canvas id="trendChart" height="250"></canvas>
+            <div x-show="!trendIds.length" class="text-sm text-gray-400 text-center py-6">点击上方学生姓名查看积分趋势</div>
+        </div>
+    </div>
+
+    <!-- ========== 小组 ========== -->
+    <div x-show="view==='group'">
+        <div class="grid md:grid-cols-2 gap-3">
+            <template x-for="g in groupSummary" :key="g.group_name">
+                <div class="card p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-semibold text-sm" x-text="g.group_name+'组'"></span>
+                        <span class="text-lg font-bold" :class="g.total_score>=0?'text-emerald-600':'text-red-500'" x-text="g.total_score"></span>
+                    </div>
+                    <div class="flex gap-4 text-xs text-gray-400"><span x-text="g.member_count+'人'"></span><span x-text="'均分 '+g.avg_score"></span></div>
+                </div>
+            </template>
+        </div>
+        <div x-show="!groupSummary.length" class="text-center py-8 text-gray-400 text-sm">暂无数据</div>
+    </div>
+
+    <!-- ========== 录入积分模态框 ========== -->
+    <div x-show="showEntry" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showEntry=false">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 p-5 max-h-[85vh] overflow-y-auto">
+            <h3 class="text-base font-semibold mb-4">录入每周积分</h3>
+            <div class="mb-2 text-sm text-gray-500" x-text="'当前学期：' + currentSemName"></div>
+            <div class="mb-4">
+                <label class="text-xs text-gray-500">第几周</label>
+                <input x-model.number="entryWeek" type="number" min="1" class="w-32 border border-gray-200 px-3 py-1.5 text-sm mt-0.5">
+            </div>
+
+            <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-lg w-fit">
+                <button @click="entryMode='manual'" :class="entryMode==='manual'?'bg-white shadow text-gray-800':'text-gray-500'" class="px-3 py-1 text-xs rounded-md">手动录入</button>
+                <button @click="entryMode='file'" :class="entryMode==='file'?'bg-white shadow text-gray-800':'text-gray-500'" class="px-3 py-1 text-xs rounded-md">上传文件</button>
+            </div>
+
+            <div x-show="entryMode==='file'" class="mb-4">
+                <div class="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center hover:border-primary-300 transition-colors">
+                    <i class="lucide lucide-upload-cloud text-2xl text-gray-400 mb-2"></i>
+                    <p class="text-sm text-gray-500 mb-2">上传积分表（.xlsx / .xls）</p>
+                    <input type="file" accept=".xlsx,.xls" @change="parseFile($event)" class="text-sm text-gray-500">
+                </div>
+                <div x-show="parsedData" class="mt-3">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-sm text-emerald-600" x-text="'匹配 '+(parsedData?.matched_names||0)+'/'+(parsedData?.total_names||0)+' 名学生，共 '+(parsedData?.records?.length||0)+' 条积分'"></span>
+                        <span x-show="parsedData?.unmatched?.length" class="text-xs text-amber-500" x-text="'未匹配: '+(parsedData?.unmatched||[]).join('、')"></span>
+                    </div>
+                    <template x-for="wk in (parsedData?.weeks||[])" :key="wk">
+                        <div class="mb-2">
+                            <div class="text-xs text-gray-500 font-medium mb-1" x-text="'第'+wk+'周'"></div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <template x-for="r in (parsedData?.records||[]).filter(x=>x.week_num===wk).slice(0,20)" :key="r.student_id+'-'+r.week_num">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-50 rounded text-xs">
+                                        <span class="text-gray-600" x-text="r.name"></span>
+                                        <span class="font-medium" :class="r.score>=0?'text-emerald-600':'text-red-500'" x-text="r.score"></span>
+                                    </span>
+                                </template>
+                                <span x-show="(parsedData?.records||[]).filter(x=>x.week_num===wk).length>20" class="text-xs text-gray-400 self-center">...</span>
+                            </div>
+                        </div>
+                    </template>
+                    <div class="mt-3 flex items-center gap-2">
+                        <label class="text-xs text-gray-500">导入第</label>
+                        <select x-model.number="parseWeek" class="border border-gray-200 px-2 py-1 text-xs">
+                            <template x-for="wk in (parsedData?.weeks||[])" :key="wk"><option :value="wk" x-text="'第'+wk+'周'"></option></template>
+                        </select>
+                        <button @click="submitParsedFile()" class="px-4 py-1.5 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600">确认导入</button>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="entryMode==='manual'">
+                <div class="table-container mb-4">
+                    <table class="w-full text-sm">
+                        <thead><tr class="text-left text-xs text-gray-500"><th class="px-2 py-2">姓名</th><th class="px-2 py-2 w-24">积分</th></tr></thead>
+                        <tbody>
+                            <template x-for="s in allStudents" :key="s.id">
+                                <tr class="border-t border-gray-50">
+                                    <td class="px-2 py-1.5" x-text="s.name"></td>
+                                    <td class="px-2 py-1.5"><input type="number" x-model.number="entryScores[s.id]" class="w-full border border-gray-200 px-2 py-1 text-sm" placeholder="0"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <button @click="showEntry=false;parsedData=null" class="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">取消</button>
+                <button x-show="entryMode==='manual'" @click="submitPoints()" class="px-4 py-1.5 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pointsPage() {
+    return {
+        view: 'alltime',
+        allTimeSummary: [], semesterSummary: [], weeklySummary: [], groupSummary: [],
+        allStudents: [], weekList: [], weekNum: '',
+        currentSemName: '{{ semester.name if semester else "" }}',
+        currentSemId: '{{ semester.id if semester else "" }}',
+        trendIds: [], trendChart: null,
+        showEntry: false, entryMode: 'manual', entryWeek: 1, entryScores: {},
+        parsedData: null, parseWeek: 1,
+
+        async load() {
+            this.allStudents = await api.get('/api/students');
+            await this.loadAllTimeSummary();
+            await this.loadWeeks();
+        },
+
+        async loadAllTimeSummary() {
+            const res = await api.get('/api/points/summary');
+            this.allTimeSummary = res.students || [];
+        },
+
+        async loadSemesterSummary() {
+            const res = await api.get('/api/points/semester_summary');
+            this.semesterSummary = res.students || [];
+        },
+
+        async loadWeeks() {
+            this.weekList = await api.get('/api/points/weeks');
+            if (this.weekList.length && !this.weekNum) this.weekNum = this.weekList[0].week_num;
+            if (this.weekNum) await this.loadWeeklySummary();
+        },
+
+        async loadWeeklySummary() {
+            if (!this.weekNum) { this.weeklySummary = []; return; }
+            const res = await api.get('/api/points/weekly_summary?week=' + this.weekNum);
+            this.weeklySummary = res.students || [];
+        },
+
+        async loadGroupSummary() {
+            this.groupSummary = await api.get('/api/points/group_summary') || [];
+        },
+
+        toggleTrend(id) {
+            const i = this.trendIds.indexOf(id);
+            if (i >= 0) this.trendIds.splice(i, 1);
+            else if (this.trendIds.length < 10) this.trendIds.push(id);
+            this.drawTrend();
+        },
+
+        async drawTrend() {
+            if (!this.trendIds.length) return;
+            const data = await api.get('/api/points/trend?student_ids=' + this.trendIds.join(','));
+            const grouped = {};
+            data.forEach(r => { if (!grouped[r.name]) grouped[r.name] = []; grouped[r.name].push(r); });
+            const colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899','#14b8a6','#a855f7'];
+            const datasets = Object.keys(grouped).map((name, i) => ({
+                label: name, data: grouped[name].map(r => r.score),
+                borderColor: colors[i % colors.length], tension: 0.3, pointRadius: 3
+            }));
+            const allWeeks = [...new Set(data.map(r => r.week_num))].sort((a,b)=>a-b);
+            const ctx = document.getElementById('trendChart');
+            if (this.trendChart) this.trendChart.destroy();
+            this.trendChart = new Chart(ctx, {
+                type: 'line', data: { labels: allWeeks.map(w=>'第'+w+'周'), datasets },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+        },
+
+        async parseFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const fd = new FormData(); fd.append('file', file);
+            const res = await fetch('/api/points/parse_file', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.ok) { this.parsedData = data; if (data.weeks.length) this.parseWeek = data.weeks[0]; }
+            else alert(data.error || '解析失败');
+        },
+
+        async submitParsedFile() {
+            if (!this.parsedData || !this.parsedData.records.length) { alert('没有可导入的数据'); return; }
+            const records = this.parsedData.records.filter(r => r.week_num === this.parseWeek).map(r => ({student_id: r.student_id, score: r.score}));
+            if (!records.length) { alert('当前周次没有数据'); return; }
+            const res = await api.post('/api/points', { week_num: this.parseWeek, records });
+            if (res.ok) { this.showEntry = false; this.parsedData = null; this.load(); }
+            else alert(res.error || '保存失败');
+        },
+
+        async submitPoints() {
+            if (!this.entryWeek) { alert('请填写周次'); return; }
+            const records = Object.entries(this.entryScores)
+                .filter(([_, v]) => v !== '' && v !== undefined && v !== null)
+                .map(([sid, score]) => ({student_id: parseInt(sid), score: parseFloat(score)}));
+            if (!records.length) { alert('请至少填写一条积分'); return; }
+            const res = await api.post('/api/points', { week_num: this.entryWeek, records });
+            if (res.ok) { this.showEntry = false; this.entryScores = {}; this.load(); }
+            else alert(res.error || '保存失败');
+        }
+    };
+}
+</script>
+{% endblock %}

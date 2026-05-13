@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if cohort %}{{ cohort.display_name }}{% endif %}{% if semester %} · {{ semester.name }}{% endif %}管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@latest/font/lucide.min.css" rel="stylesheet">
+    <style>
+        [x-cloak] { display: none !important; }
+        .nav-active { background: rgba(99,102,241,0.15); color: #6366f1; font-weight: 600; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        input, select, textarea { border-radius: 8px !important; }
+        .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table th { position: sticky; top: 0; background: #f8fafc; z-index: 1; }
+    </style>
+    <script>
+    tailwind.config = {
+        theme: { extend: { colors: {
+            primary: { 50:'#eef2ff', 100:'#e0e7ff', 200:'#c7d2fe', 300:'#a5b4fc', 400:'#818cf8', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca' },
+        }}}
+    }
+    </script>
+</head>
+<body class="h-full bg-gray-50 text-gray-800" x-data="{ mobileMenu: false }">
+
+<!-- PC 侧边栏 -->
+<aside class="hidden md:flex md:flex-col md:w-56 md:fixed md:inset-y-0 bg-white border-r border-gray-200 z-30">
+    <div class="px-4 py-3 border-b border-gray-100">
+        <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center text-white text-sm font-bold">
+                {% if cohort %}{{ cohort.class_no }}{% else %}班{% endif %}
+            </div>
+            <div class="text-sm font-semibold text-gray-700 leading-tight">
+                {% if cohort %}{{ cohort.display_name }}{% else %}班级管理{% endif %}
+            </div>
+        </div>
+        <!-- 届次切换器 -->
+        <div x-data="cohortSwitcher()" x-init="load()">
+            <select x-model="currentId" @change="switchTo()" class="w-full border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary-300">
+                <option value="">-- 选择届次 --</option>
+                <template x-for="c in cohorts" :key="c.id">
+                    <option :value="c.id" x-text="c.display_name" :selected="c.id == currentId"></option>
+                </template>
+            </select>
+            <a href="/settings" class="block text-xs text-primary-500 hover:underline mt-1">+ 新建届次</a>
+        </div>
+        {% if semesters %}
+        <!-- 学期切换器 -->
+        <div x-data="semesterSwitcher()" x-init="load()" class="mt-2">
+            <select x-model="currentId" @change="switchTo()" class="w-full border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary-300">
+                <template x-for="s in semesters" :key="s.id">
+                    <option :value="s.id" x-text="s.name + (s.year_range ? ' (' + s.year_range + ')' : '')" :selected="s.id == currentId"></option>
+                </template>
+            </select>
+        </div>
+        {% endif %}
+    </div>
+    <nav class="flex-1 px-3 py-4 space-y-1">
+        <a href="/" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 {% block nav_dashboard %}{% endblock %}">
+            <i class="lucide lucide-layout-dashboard text-base"></i> 首页
+        </a>
+        <a href="/students" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 {% block nav_students %}{% endblock %}">
+            <i class="lucide lucide-users text-base"></i> 学生管理
+        </a>
+        <a href="/points" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 {% block nav_points %}{% endblock %}">
+            <i class="lucide lucide-star text-base"></i> 积分管理
+        </a>
+        <a href="/scores" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 {% block nav_scores %}{% endblock %}">
+            <i class="lucide lucide-graduation-cap text-base"></i> 成绩管理
+        </a>
+        <a href="/events" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 {% block nav_events %}{% endblock %}">
+            <i class="lucide lucide-calendar-days text-base"></i> 事件记录
+        </a>
+        <a href="/import" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 {% block nav_import %}{% endblock %}">
+            <i class="lucide lucide-upload text-base"></i> 数据导入
+        </a>
+        <a href="/ai" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 {% block nav_ai %}{% endblock %}">
+            <i class="lucide lucide-bot text-base"></i> AI 对话
+        </a>
+        <a href="/settings" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 {% block nav_settings %}{% endblock %}">
+            <i class="lucide lucide-settings text-base"></i> 设置
+        </a>
+    </nav>
+    <div class="px-5 py-3 border-t border-gray-100 text-xs text-gray-400">
+        {% if cohort %}{{ cohort.display_name }}{% if semester %} · {{ semester.name }}{% endif %}{% else %}班级管理系统{% endif %}
+    </div>
+</aside>
+
+<!-- 手机顶部栏 -->
+<div class="md:hidden fixed top-0 inset-x-0 bg-white border-b border-gray-200 z-30 px-4 py-2">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <div class="w-7 h-7 bg-primary-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">
+                {% if cohort %}{{ cohort.class_no }}{% else %}班{% endif %}
+            </div>
+            <span class="font-semibold text-sm">{% block mobile_title %}管理{% endblock %}</span>
+        </div>
+        <button @click="mobileMenu = !mobileMenu" class="p-1"><i class="lucide lucide-menu text-lg"></i></button>
+    </div>
+    <!-- 手机 届次+学期 切换 -->
+    <div class="flex gap-1.5 mt-1.5" x-data="mobileSwitcher()" x-init="load()">
+        <select x-model="cohortId" @change="switchCohort()" class="flex-1 border border-gray-200 px-2 py-1 text-xs focus:outline-none">
+            <option value="">-- 届次 --</option>
+            <template x-for="c in cohorts" :key="c.id">
+                <option :value="c.id" x-text="c.display_name" :selected="c.id == cohortId"></option>
+            </template>
+        </select>
+        <select x-model="semesterId" @change="switchSemester()" class="flex-1 border border-gray-200 px-2 py-1 text-xs focus:outline-none">
+            <template x-for="s in semesters" :key="s.id">
+                <option :value="s.id" x-text="s.name" :selected="s.id == semesterId"></option>
+            </template>
+        </select>
+    </div>
+</div>
+
+<!-- 手机下拉菜单 -->
+<div x-show="mobileMenu" x-cloak @click.away="mobileMenu = false"
+     class="md:hidden fixed top-[5.5rem] inset-x-0 bg-white border-b border-gray-200 z-30 shadow-lg" x-transition>
+    <nav class="px-4 py-2 space-y-1">
+        <a href="/" class="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">首页</a>
+        <a href="/students" class="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">学生管理</a>
+        <a href="/points" class="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">积分管理</a>
+        <a href="/scores" class="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">成绩管理</a>
+        <a href="/events" class="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">事件记录</a>
+        <a href="/import" class="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">数据导入</a>
+        <a href="/ai" class="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">AI 对话</a>
+        <a href="/settings" class="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">设置</a>
+    </nav>
+</div>
+
+<!-- 主内容区 -->
+<main class="md:ml-56 pt-24 md:pt-0 min-h-full">
+    <div class="p-4 md:p-6 max-w-7xl mx-auto">
+        {% block content %}{% endblock %}
+    </div>
+</main>
+
+<!-- 悬浮AI助手按钮（所有页面通用） -->
+<div x-data="floatingChat()" x-init="initChat()">
+    <!-- 悬浮按钮 -->
+    <button @click="open = !open; if(open) scrollToBottom()"
+            class="fixed bottom-20 md:bottom-6 right-4 z-50 w-11 h-11 bg-gradient-to-br from-primary-400 to-primary-600 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
+            :class="{'rotate-45 scale-90': open}"
+            title="AI助手">
+        <span class="text-sm font-bold tracking-wide">AI</span>
+    </button>
+
+    <!-- AI浮窗 -->
+    <div x-show="open" x-cloak @click.away="open = false"
+         class="fixed bottom-36 md:bottom-20 right-4 z-50 w-[88vw] md:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col"
+         style="max-height: 70vh;">
+
+        <!-- 头部 -->
+        <div class="flex items-center gap-2 px-3 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white shrink-0">
+            <div class="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center">
+                <i class="lucide lucide-sparkles text-white text-xs"></i>
+            </div>
+            <span class="text-sm font-semibold">AI 助手</span>
+            <span class="text-[10px] text-white/70 ml-auto" x-text="'当前页'"></span>
+            <button @click="open = false" class="text-white/80 hover:text-white">
+                <i class="lucide lucide-x text-sm"></i>
+            </button>
+        </div>
+
+        <!-- 消息列表 -->
+        <div class="flex-1 overflow-y-auto px-3 py-2 space-y-2 min-h-0" id="floatChatMessages" x-ref="floatChatMessages">
+            <template x-for="(msg, i) in messages" :key="i">
+                <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                    <div :class="msg.role === 'user'
+                        ? 'bg-primary-500 text-white rounded-2xl rounded-tr-sm'
+                        : 'bg-gray-100 text-gray-700 rounded-2xl rounded-tl-sm'"
+                        class="px-3 py-1.5 text-xs max-w-[85%] whitespace-pre-wrap" x-html="renderMarkdown(msg.content)">
+                    </div>
+                </div>
+            </template>
+            <div x-show="loading" class="flex justify-start">
+                <div class="bg-gray-100 rounded-2xl rounded-tl-sm px-3 py-1.5 text-xs text-gray-400">
+                    <span class="animate-pulse">思考中...</span>
+                </div>
+            </div>
+            <div x-show="!messages.length && !loading" class="text-center py-3">
+                <p class="text-xs text-gray-400 mb-1.5">可以问我：</p>
+                <div class="flex flex-wrap gap-1 justify-center">
+                    <button @click="send('班级有多少人')" class="px-2 py-0.5 bg-gray-50 hover:bg-gray-100 rounded-full text-[10px] text-gray-500">班级有多少人</button>
+                    <button @click="send('积分排名')" class="px-2 py-0.5 bg-gray-50 hover:bg-gray-100 rounded-full text-[10px] text-gray-500">积分排名</button>
+                    <button @click="send('谁违纪最多')" class="px-2 py-0.5 bg-gray-50 hover:bg-gray-100 rounded-full text-[10px] text-gray-500">谁违纪最多</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 输入区 -->
+        <div class="border-t border-gray-100 px-3 py-2 shrink-0">
+            <div x-show="pendingFile" x-cloak class="flex items-center gap-1.5 px-2 py-1 mb-1.5 bg-primary-50 border border-primary-200 rounded-lg text-[10px]">
+                <i class="lucide lucide-file-text text-primary-500 text-xs"></i>
+                <span class="flex-1 truncate text-primary-700" x-text="pendingFile?.name || ''"></span>
+                <button @click="pendingFile = null" class="text-gray-400 hover:text-red-500 shrink-0">
+                    <i class="lucide lucide-x text-xs"></i>
+                </button>
+            </div>
+            <div class="flex gap-1.5">
+                <button @click="$refs.floatFileInput.click()" :disabled="loading"
+                        class="px-2 py-1.5 text-gray-500 hover:text-primary-600 border border-gray-200 rounded-lg shrink-0"
+                        :class="{'opacity-40': loading}" title="上传Excel">
+                    <i class="lucide lucide-paperclip text-sm"></i>
+                </button>
+                <input type="file" x-ref="floatFileInput" accept=".xlsx,.xls"
+                       class="hidden" @change="selectFile($event)">
+                <input type="text" x-model="input" @keydown.enter="send(input)"
+                       placeholder="问班级数据..."
+                       class="flex-1 border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-300"
+                       :disabled="loading">
+                <button @click="send(input)" :disabled="loading || (!input.trim() && !pendingFile)"
+                        class="px-3 py-1.5 bg-primary-500 text-white text-xs rounded-lg hover:bg-primary-600 disabled:opacity-40 shrink-0">
+                    发送
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 手机底部导航 -->
+<nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-30 flex justify-around py-1">
+    <a href="/" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_dashboard %}text-gray-400{% endblock %}"><i class="lucide lucide-layout-dashboard text-lg"></i><span>首页</span></a>
+    <a href="/students" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_students %}text-gray-400{% endblock %}"><i class="lucide lucide-users text-lg"></i><span>学生</span></a>
+    <a href="/points" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_points %}text-gray-400{% endblock %}"><i class="lucide lucide-star text-lg"></i><span>积分</span></a>
+    <a href="/scores" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_scores %}text-gray-400{% endblock %}"><i class="lucide lucide-graduation-cap text-lg"></i><span>成绩</span></a>
+    <a href="/events" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_events %}text-gray-400{% endblock %}"><i class="lucide lucide-calendar-days text-lg"></i><span>事件</span></a>
+    <a href="/ai" class="flex flex-col items-center py-1.5 px-2 text-xs {% block tab_ai %}text-gray-400{% endblock %}"><i class="lucide lucide-bot text-lg"></i><span>AI</span></a>
+</nav>
+
+<script>
+const api = {
+    async get(url) { return (await fetch(url)).json(); },
+    async post(url, data) { return (await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json(); },
+    async put(url, data) { return (await fetch(url, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json(); },
+    async del(url) { return (await fetch(url, {method:'DELETE'})).json(); },
+};
+
+function cohortSwitcher() {
+    return {
+        cohorts: [], currentId: '{{ cohort.id if cohort else "" }}',
+        async load() { this.cohorts = await api.get('/api/cohorts'); },
+        async switchTo() {
+            if (!this.currentId) return;
+            const res = await api.post('/api/cohorts/active', {cohort_id: parseInt(this.currentId)});
+            if (res.ok) location.reload();
+        }
+    };
+}
+
+function semesterSwitcher() {
+    return {
+        semesters: [], currentId: '{{ semester.id if semester else "" }}',
+        async load() { this.semesters = await api.get('/api/semesters'); },
+        async switchTo() {
+            if (!this.currentId) return;
+            const res = await api.post('/api/semesters/active', {semester_id: parseInt(this.currentId)});
+            if (res.ok) location.reload();
+        }
+    };
+}
+
+function mobileSwitcher() {
+    return {
+        cohorts: [], semesters: [],
+        cohortId: '{{ cohort.id if cohort else "" }}',
+        semesterId: '{{ semester.id if semester else "" }}',
+        async load() {
+            this.cohorts = await api.get('/api/cohorts');
+            this.semesters = await api.get('/api/semesters');
+        },
+        async switchCohort() {
+            if (!this.cohortId) return;
+            await api.post('/api/cohorts/active', {cohort_id: parseInt(this.cohortId)});
+            location.reload();
+        },
+        async switchSemester() {
+            if (!this.semesterId) return;
+            await api.post('/api/semesters/active', {semester_id: parseInt(this.semesterId)});
+            location.reload();
+        }
+    };
+}
+
+/* 悬浮AI助手 */
+function floatingChat() {
+    return {
+        open: false,
+        messages: [],
+        input: '',
+        loading: false,
+        pendingFile: null,
+        STORAGE_KEY: 'float_ai_chat',
+
+        renderMarkdown(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                .replace(/\n/g, '<br>');
+        },
+
+        initChat() {
+            try {
+                const saved = localStorage.getItem(this.STORAGE_KEY);
+                if (saved) this.messages = JSON.parse(saved);
+            } catch (e) {}
+        },
+
+        saveHistory() {
+            try {
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.messages.slice(-30)));
+            } catch (e) {}
+        },
+
+        async send(text) {
+            const msg = (text || this.input || '').trim();
+            if (!msg && !this.pendingFile) return;
+            if (this.loading) return;
+
+            if (this.pendingFile) {
+                const fileName = this.pendingFile.name;
+                const file = this.pendingFile;
+                this.pendingFile = null;
+                this.input = '';
+                this.messages.push({role: 'user', content: `📎 ${fileName}` + (msg ? `\n${msg}` : '')});
+                this.loading = true;
+                this.scrollToBottom();
+                this.saveHistory();
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    if (msg) formData.append('message', msg);
+                    const res = await fetch('/api/chat/upload', {method: 'POST', body: formData});
+                    const data = await res.json();
+                    this.messages.push({role: 'assistant', content: data.reply || '文件处理完成'});
+                    this.saveHistory();
+                } catch (e) {
+                    this.messages.push({role: 'assistant', content: '⚠️ 文件上传出错'});
+                }
+                this.loading = false;
+                this.scrollToBottom();
+            } else {
+                this.input = '';
+                this.messages.push({role: 'user', content: msg});
+                this.loading = true;
+                this.scrollToBottom();
+                this.saveHistory();
+                try {
+                    const res = await api.post('/api/chat', {
+                        message: msg,
+                        messages: this.messages.slice(0, -1)
+                    });
+                    this.messages.push({role: 'assistant', content: res.reply || '（无回复）'});
+                    this.saveHistory();
+                } catch (e) {
+                    this.messages.push({role: 'assistant', content: '网络错误，请重试'});
+                }
+                this.loading = false;
+                this.scrollToBottom();
+            }
+        },
+
+        selectFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            event.target.value = '';
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                this.messages.push({role: 'assistant', content: '⚠️ 仅支持 Excel 文件'});
+                this.saveHistory();
+                return;
+            }
+            this.pendingFile = file;
+        },
+
+        scrollToBottom() {
+            this.$nextTick(() => {
+                const el = this.$refs.floatChatMessages;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        }
+    };
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const path = location.pathname;
+    document.querySelectorAll('.nav-link').forEach(link => {
+        if (link.getAttribute('href') === path) link.classList.add('nav-active');
+    });
+});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
