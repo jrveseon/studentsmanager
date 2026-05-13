@@ -190,7 +190,7 @@ def create_cohort():
             VALUES (?, ?, ?, ?)
         """, (grade, class_no, display_name, data.get('notes', '')))
         g.db.commit()
-        cid = g.db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        cid = g.db.insert_id()
         # 自动创建6个学期
         create_default_semesters(g.db, cid, grade)
         cnt = g.db.execute("SELECT COUNT(*) as c FROM cohorts").fetchone()['c']
@@ -359,7 +359,7 @@ def create_student():
               data.get('mother'), data.get('mother_work'), data.get('mother_phone'),
               data.get('notes')))
         g.db.commit()
-        return jsonify({'ok': True, 'id': g.db.execute("SELECT last_insert_rowid()").fetchone()[0]})
+        return jsonify({'ok': True, 'id': g.db.insert_id()})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
 
@@ -709,7 +709,7 @@ def create_exam():
         VALUES (?, ?, ?, ?, ?, ?)
     """, (cid, semester_id, data['name'], data['exam_type'], data.get('exam_date'), data.get('notes')))
     g.db.commit()
-    return jsonify({'ok': True, 'id': g.db.execute("SELECT last_insert_rowid()").fetchone()[0]})
+    return jsonify({'ok': True, 'id': g.db.insert_id()})
 
 
 @app.route('/api/exams/<int:eid>', methods=['DELETE'])
@@ -803,7 +803,7 @@ def import_scores_file():
                 try:
                     g.db.execute("INSERT INTO students (cohort_id, student_no, name) VALUES (?, ?, ?)",
                                  (cid, f'AUTO-{rec["name"]}', rec['name']))
-                    student = {'id': g.db.execute("SELECT last_insert_rowid()").fetchone()[0]}
+                    student = {'id': g.db.insert_id()}
                     auto_created += 1
                 except Exception:
                     unmatched += 1
@@ -921,7 +921,7 @@ def create_event():
     """, (data['student_id'], data['event_type'], data['title'],
           data.get('description'), data['event_date'], data.get('severity'), data.get('follow_up')))
     g.db.commit()
-    return jsonify({'ok': True, 'id': g.db.execute("SELECT last_insert_rowid()").fetchone()[0]})
+    return jsonify({'ok': True, 'id': g.db.insert_id()})
 
 
 @app.route('/api/events/<int:eid>', methods=['PUT'])
@@ -1118,7 +1118,7 @@ def import_points():
                 try:
                     g.db.execute("INSERT INTO students (cohort_id, student_no, name) VALUES (?, ?, ?)",
                                  (cid, f'AUTO-{rec["name"]}', rec['name']))
-                    student = {'id': g.db.execute("SELECT last_insert_rowid()").fetchone()[0]}
+                    student = {'id': g.db.insert_id()}
                     auto_created += 1
                 except Exception:
                     skipped += 1
@@ -1168,7 +1168,7 @@ def import_scores():
         records = parse_scores_excel(tmp_path)
         g.db.execute("INSERT INTO score_exams (cohort_id, semester_id, name, exam_type) VALUES (?, ?, ?, ?)",
                      (cid, semester_id, exam_name, exam_type))
-        exam_id = g.db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        exam_id = g.db.insert_id()
         count, auto_created = 0, 0
         for rec in records:
             student = g.db.execute("SELECT id FROM students WHERE name = ? AND cohort_id = ?", (rec['name'], cid)).fetchone()
@@ -1176,7 +1176,7 @@ def import_scores():
                 try:
                     g.db.execute("INSERT INTO students (cohort_id, student_no, name) VALUES (?, ?, ?)",
                                  (cid, f'AUTO-{rec["name"]}', rec['name']))
-                    student = {'id': g.db.execute("SELECT last_insert_rowid()").fetchone()[0]}
+                    student = {'id': g.db.insert_id()}
                     auto_created += 1
                 except Exception:
                     continue
@@ -1432,7 +1432,7 @@ def _try_auto_import(db, header, data_rows, cohort_id, semester_id, filename):
                       VALUES (?, ?, ?, ?, ?)""",
                    (cohort_id, semester_id, exam_name, '考试', today))
 
-        exam_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        exam_id = db.insert_id()
         imported = 0
         skipped = 0
 

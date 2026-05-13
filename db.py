@@ -122,6 +122,13 @@ class Database:
         if not self._is_pg:
             self.conn.commit()
 
+    def insert_id(self):
+        """返回最后一次 INSERT 产生的自增 ID（兼容 SQLite 和 PostgreSQL）"""
+        if self._is_pg:
+            return self._last_insert_id
+        c = self.conn.execute("SELECT last_insert_rowid()")
+        return c.fetchone()[0]
+
     def close(self):
         self.conn.close()
 
