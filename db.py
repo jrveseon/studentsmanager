@@ -38,13 +38,13 @@ _PG_INSERT_OR_IGNORE_RE = re.compile(r'\bINSERT OR IGNORE\b', re.IGNORECASE)
 def _to_pg_sql(sql):
     """将 SQLite SQL 转换为 PostgreSQL 兼容语法"""
     original = sql
+    # 替换 INSERT OR IGNORE（必须第一个执行，因为要判断 original）
+    had_ignore = _PG_INSERT_OR_IGNORE_RE.search(original)
     for pattern, repl in _PG_SQL_REPLACEMENTS:
         sql = re.sub(pattern, repl, sql, flags=re.IGNORECASE)
     # INSERT OR IGNORE → 末尾加 ON CONFLICT DO NOTHING
-    if _PG_INSERT_OR_IGNORE_RE.search(original):
-        # 去掉可能已添加的重复
-        if 'ON CONFLICT DO NOTHING' not in sql.upper():
-            sql = sql.rstrip(';') + ' ON CONFLICT DO NOTHING'
+    if had_ignore and 'ON CONFLICT DO NOTHING' not in sql.upper():
+        sql = sql.rstrip(';') + ' ON CONFLICT DO NOTHING'
     return sql
 
 
@@ -55,6 +55,7 @@ class Database:
 
     def __init__(self):
         self._is_pg = bool(DATABASE_URL)
+        self._last_insert_id = None
         if self._is_pg:
             self._init_pg()
         else:
@@ -76,8 +77,30 @@ class Database:
     def execute(self, sql, params=None):
         if self._is_pg:
             sql = _to_pg_sql(sql)
+            upper = sql.strip().upper()
             c = self.conn.cursor(cursor_factory=self._pg_cursor_factory)
+
+            # SELECT lastval() → 返回储存的上次插入ID
+            if upper == 'SELECT LASTVAL()' or upper.startswith('SELECT LASTVAL()'):
+                fake = self.conn.cursor(cursor_factory=self._pg_cursor_factory)
+                fake.execute(f"SELECT {self._last_insert_id or 0} AS id")
+                return fake
+
+            # INSERT 自动追加 RETURNING id
+            if upper.startswith('INSERT') and 'RETURNING' not in upper:
+                sql = sql.rstrip(';') + ' RETURNING id'
+
             c.execute(sql, params or ())
+
+            # 捕获 INSERT 返回的 ID
+            if upper.startswith('INSERT'):
+                try:
+                    row = c.fetchone()
+                    if row:
+                        self._last_insert_id = row['id']
+                except Exception:
+                    pass
+
             return c
         else:
             if isinstance(params, (list, tuple)) and len(params) == 0:
