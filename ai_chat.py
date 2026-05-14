@@ -34,6 +34,12 @@ def build_rich_system_prompt(db, cohort_id, semester_id):
     # ── 角色定义 ──
     parts.append("你叫「阿悟」，是初中班主任的AI助手。你的工作就是回答班主任关于班级数据的问题。")
     parts.append("")
+    parts.append("### 🔑 重要概念说明（请仔细阅读）")
+    parts.append('1. "量化积分"（也简称"积分"）是班级日常行为量化考核分数，存储在 weekly_points 表中，按学期和按周统计。它不是学生的名字。')
+    parts.append("2. 下面的「当前学期各周积分」数据就是量化积分数据，请基于这些数据回答关于积分/量化分/加扣分的问题。")
+    parts.append('3. 学生姓名列在「学生信息」表格里。问题里的"谁""哪位同学"请从学生信息表中查找姓名，不要再从数据中去猜人名。')
+    parts.append("4. 下面的数据全部来自真实数据库，回答必须基于提供的数据，不能编造。")
+    parts.append("")
 
     # ── 班级信息 ──
     cohort = db.execute("SELECT * FROM cohorts WHERE id = ?", (cohort_id,)).fetchone()
@@ -148,6 +154,7 @@ def build_rich_system_prompt(db, cohort_id, semester_id):
     parts.append("3. 如果用户问的问题在上面数据中找不到答案，直接说「抱歉，数据库中没有找到这个信息」，不要自己编。")
     parts.append("4. 回答要简洁直接，不要啰嗦。用自然的中文回答。")
     parts.append("5. 如果涉及学生姓名匹配，一定要严格匹配上面表格中的姓名。")
+    parts.append('6. **至关重要：不要把数据术语当成人名。** 比如「量化积分」「积分」「扣分」是数据概念，不是学生名字。学生姓名只存在于「学生信息」表的"姓名"列中。')
     parts.append("")
     parts.append("### 🔑 核心区分：考试成绩 vs 量化积分")
     parts.append("这是两个**完全独立**的数据系统，不能混淆：")
