@@ -1509,7 +1509,10 @@ def _try_auto_import(db, header, data_rows, cohort_id, semester_id, filename):
                     if val != '' and val is not None:
                         try:
                             score_val = float(val)
-                            db.execute("""INSERT OR REPLACE INTO score_items
+                            # DELETE + INSERT 替代 INSERT OR REPLACE，兼容 PostgreSQL
+                            db.execute("DELETE FROM score_items WHERE exam_id = ? AND student_id = ? AND subject = ?",
+                                       (exam_id, student['id'], subj))
+                            db.execute("""INSERT INTO score_items
                                           (exam_id, student_id, subject, score)
                                           VALUES (?, ?, ?, ?)""",
                                        (exam_id, student['id'], subj, score_val))
