@@ -159,6 +159,14 @@
     <!-- 积分趋势 -->
     <div class="card p-4 mb-4">
         <h3 class="text-sm font-semibold text-gray-700 mb-3">积分趋势</h3>
+        <div class="flex flex-wrap gap-1.5 mb-3">
+            <button @click="selectPointSemester('')" :class="pointSemester === '' ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-600'"
+                    class="px-2.5 py-1 rounded text-xs">总趋势</button>
+            <template x-for="s in semesters" :key="s.id">
+                <button @click="selectPointSemester(s.id)" :class="pointSemester === s.id ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-600'"
+                        class="px-2.5 py-1 rounded text-xs" x-text="s.name"></button>
+            </template>
+        </div>
         <canvas id="pointsChart" height="200"></canvas>
         <div x-show="!pointData.length" class="text-sm text-gray-400 text-center py-6">暂无积分数据</div>
     </div>
@@ -224,13 +232,23 @@ function studentDetail(id) {
         editMode: false,
         pointsChart: null,
         scoresChart: null,
+        semesters: [],
+        pointSemester: '',
         async load() {
             this.student = await api.get('/api/students/' + id);
+            this.semesters = await api.get('/api/semesters');
             this.pointData = await api.get('/api/points?student_id=' + id);
             this.drawPointsChart();
             this.subjects = await api.get('/api/scores/subjects');
             await this.loadScoreTrend('');
             this.events = await api.get('/api/events?student_id=' + id);
+        },
+        async selectPointSemester(semesterId) {
+            this.pointSemester = semesterId;
+            const params = new URLSearchParams({student_id: id});
+            if (semesterId) params.set('semester_id', semesterId);
+            this.pointData = await api.get('/api/points?' + params.toString());
+            this.drawPointsChart();
         },
         enterEdit() {
             // 深拷贝当前学生数据作为编辑表单
@@ -272,10 +290,11 @@ function studentDetail(id) {
             const ctx = document.getElementById('pointsChart');
             if (this.pointsChart) this.pointsChart.destroy();
             const sorted = [...this.pointData].sort((a,b) => a.week_num - b.week_num);
+            const labels = sorted.map(r => (r.semester_name || '') + '第' + r.week_num + '周');
             this.pointsChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: sorted.map(r => '第' + r.week_num + '周'),
+                    labels,
                     datasets: [{
                         label: '积分',
                         data: sorted.map(r => r.score),
