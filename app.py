@@ -1621,19 +1621,60 @@ def _execute_ai_actions(db, reply, cohort_id, semester_id):
                 updated = 0
                 not_found = []
 
-                # 学号更新：先用临时占位值替换旧学号，避免唯一约束冲突
-                # 不能用 NULL（列有 NOT NULL 约束），用 _TEMP_<id> 作为临时值
+                # 学号更新专用流程：预检冲突→临时占位→写入新值，一次事务提交
                 if field == 'student_no':
-                    names = [item.get('name', '') for item in students if item.get('name')]
-                    for n in names:
+                    # 收集所有要更新的学生（name→新学号）
+                    update_map = {}  # {id: {'name': ..., 'value': ...}}
+                    for item in students:
+                        name = item.get('name', '')
+                        value = item.get('value', '')
+                        if not name:
+                            continue
                         s = db.execute(
                             "SELECT id FROM students WHERE cohort_id = ? AND name LIKE ? AND is_active = 1",
-                            (cohort_id, f'%{n}%')
+                            (cohort_id, f'%{name}%')
                         ).fetchone()
                         if s:
-                            db.execute("UPDATE students SET student_no = '_TEMP_' || id WHERE id = ?", (s['id'],))
-                    db.commit()
+                            update_map[s['id']] = {'name': name, 'value': value}
+                        else:
+                            not_found.append(name)
 
+                    if not update_map:
+                        log.append('❌ 批量更新失败：未找到任何匹配的学生')
+                        continue
+
+                    # 预检：新学号是否被不在更新列表中的其他学生占用
+                    new_values = set(v['value'] for v in update_map.values() if v['value'])
+                    updated_ids = set(update_map.keys())
+                    conflicts = []
+                    for nv in new_values:
+                        conflict = db.execute(
+                            "SELECT id, name FROM students WHERE cohort_id = ? AND student_no = ? AND is_active = 1",
+                            (cohort_id, nv)
+                        ).fetchone()
+                        if conflict and conflict['id'] not in updated_ids:
+                            conflicts.append(f"学号「{nv}」已被 {conflict['name']} 占用")
+
+                    if conflicts:
+                        log.append(f'❌ 学号冲突，已取消更新：{"；".join(conflicts)}')
+                        continue
+
+                    # 第一步：所有目标学生设临时学号（用主键ID做后缀保证唯一，满足NOT NULL）
+                    for sid in update_map:
+                        db.execute("UPDATE students SET student_no = '_TEMP_' || id WHERE id = ?", (sid,))
+
+                    # 第二步：写入新学号（此时已无冲突）
+                    for sid, info in update_map.items():
+                        db.execute("UPDATE students SET student_no = ? WHERE id = ?", (info['value'], sid))
+
+                    db.commit()
+                    updated = len(update_map)
+                    log.append(f'✅ 批量更新了 {updated} 名学生的{field}')
+                    if not_found:
+                        log.append(f'⚠️ 未找到的学生（{len(not_found)}人）：{"、".join(not_found[:10])}{"等" if len(not_found) > 10 else ""}')
+                    continue  # 跳过下面的通用更新逻辑
+
+                # 非学号字段的通用更新
                 for item in students:
                     name = item.get('name', '')
                     value = item.get('value', '')
