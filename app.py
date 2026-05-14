@@ -730,6 +730,62 @@ def get_group_summary():
     return jsonify(dicts_from_rows(rows))
 
 
+# ── 历史积分管理 ──
+@app.route('/api/points/week_detail', methods=['GET'])
+def get_point_week_detail():
+    """获取指定周的积分明细"""
+    cid = require_cohort()
+    if not cid:
+        return jsonify([])
+    week = request.args.get('week', type=int)
+    semester_id = request.args.get('semester_id', type=int)
+    if not week:
+        return jsonify({'ok': False, 'error': '缺少周次'}), 400
+    query = """
+        SELECT wp.id, wp.student_id, s.name, wp.score, wp.source,
+               s.group_name, wp.created_at
+        FROM weekly_points wp
+        JOIN students s ON wp.student_id = s.id
+        WHERE s.cohort_id = ? AND wp.week_num = ?
+    """
+    params = [cid, week]
+    if semester_id:
+        query += " AND wp.semester_id = ?"
+        params.append(semester_id)
+    query += " ORDER BY wp.score DESC"
+    rows = g.db.execute(query, params).fetchall()
+    return jsonify(dicts_from_rows(rows))
+
+
+@app.route('/api/points/<int:week_num>', methods=['DELETE'])
+def delete_point_week(week_num):
+    """删除指定周的所有积分"""
+    cid = require_cohort()
+    if not cid:
+        return jsonify({'ok': False, 'error': '请先选择届次'}), 400
+    semester_id = request.args.get('semester_id', type=int)
+    if semester_id:
+        g.db.execute("""
+            DELETE FROM weekly_points
+            WHERE id IN (
+                SELECT wp.id FROM weekly_points wp
+                JOIN students s ON wp.student_id = s.id
+                WHERE s.cohort_id = ? AND wp.week_num = ? AND wp.semester_id = ?
+            )
+        """, (cid, week_num, semester_id))
+    else:
+        g.db.execute("""
+            DELETE FROM weekly_points
+            WHERE id IN (
+                SELECT wp.id FROM weekly_points wp
+                JOIN students s ON wp.student_id = s.id
+                WHERE s.cohort_id = ? AND wp.week_num = ?
+            )
+        """, (cid, week_num))
+    g.db.commit()
+    return jsonify({'ok': True})
+
+
 # ── 成绩 API（改用 semester_id）──────────────────────────
 @app.route('/api/exams', methods=['GET'])
 def get_exams():
