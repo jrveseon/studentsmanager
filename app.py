@@ -1063,54 +1063,57 @@ def get_dashboard():
               'recent_events': [], 'recent_exams': []}
     if not cid:
         return jsonify(result)
-    row = db.execute("SELECT COUNT(*) as cnt FROM students WHERE cohort_id = ? AND is_active = 1", (cid,)).fetchone()
-    result['total_students'] = row['cnt']
+    try:
+        row = db.execute("SELECT COUNT(*) as cnt FROM students WHERE cohort_id = ? AND is_active = 1", (cid,)).fetchone()
+        result['total_students'] = row['cnt']
 
-    # 当前学期的最新周
-    sid = get_active_semester_id(db)
-    if sid:
-        sem = db.execute("SELECT * FROM semesters WHERE id = ?", (sid,)).fetchone()
-        result['semester_name'] = sem['name'] if sem else ''
-        latest = db.execute("""
-            SELECT MAX(wp.week_num) as max_week FROM weekly_points wp
-            JOIN students s ON wp.student_id = s.id
-            WHERE s.cohort_id = ? AND wp.semester_id = ?
-        """, (cid, sid)).fetchone()
-        if latest and latest['max_week']:
-            result['current_week'] = latest['max_week']
-            row = db.execute("""
-                SELECT ROUND(AVG(wp.score), 1) as avg_score FROM weekly_points wp
+        # 当前学期的最新周
+        sid = get_active_semester_id(db)
+        if sid:
+            sem = db.execute("SELECT * FROM semesters WHERE id = ?", (sid,)).fetchone()
+            result['semester_name'] = sem['name'] if sem else ''
+            latest = db.execute("""
+                SELECT MAX(wp.week_num) as max_week FROM weekly_points wp
                 JOIN students s ON wp.student_id = s.id
-                WHERE wp.semester_id = ? AND wp.week_num = ? AND s.cohort_id = ?
-            """, (sid, latest['max_week'], cid)).fetchone()
-            result['weekly_avg'] = row['avg_score'] or 0
-            rows = db.execute("""
-                SELECT s.name, SUM(wp.score) as total FROM weekly_points wp
-                JOIN students s ON wp.student_id = s.id
-                WHERE wp.semester_id = ? AND s.cohort_id = ? AND s.is_active = 1
-                GROUP BY s.id ORDER BY total DESC LIMIT 5
-            """, (sid, cid)).fetchall()
-            result['top5'] = dicts_from_rows(rows)
-            rows = db.execute("""
-                SELECT s.name, SUM(wp.score) as total FROM weekly_points wp
-                JOIN students s ON wp.student_id = s.id
-                WHERE wp.semester_id = ? AND s.cohort_id = ? AND s.is_active = 1
-                GROUP BY s.id ORDER BY total ASC LIMIT 5
-            """, (sid, cid)).fetchall()
-            result['bottom5'] = dicts_from_rows(rows)
+                WHERE s.cohort_id = ? AND wp.semester_id = ?
+            """, (cid, sid)).fetchone()
+            if latest and latest['max_week']:
+                result['current_week'] = latest['max_week']
+                row = db.execute("""
+                    SELECT ROUND(AVG(wp.score), 1) as avg_score FROM weekly_points wp
+                    JOIN students s ON wp.student_id = s.id
+                    WHERE wp.semester_id = ? AND wp.week_num = ? AND s.cohort_id = ?
+                """, (sid, latest['max_week'], cid)).fetchone()
+                result['weekly_avg'] = row['avg_score'] or 0
+                rows = db.execute("""
+                    SELECT s.name, SUM(wp.score) as total FROM weekly_points wp
+                    JOIN students s ON wp.student_id = s.id
+                    WHERE wp.semester_id = ? AND s.cohort_id = ? AND s.is_active = 1
+                    GROUP BY s.id ORDER BY total DESC LIMIT 5
+                """, (sid, cid)).fetchall()
+                result['top5'] = dicts_from_rows(rows)
+                rows = db.execute("""
+                    SELECT s.name, SUM(wp.score) as total FROM weekly_points wp
+                    JOIN students s ON wp.student_id = s.id
+                    WHERE wp.semester_id = ? AND s.cohort_id = ? AND s.is_active = 1
+                    GROUP BY s.id ORDER BY total ASC LIMIT 5
+                """, (sid, cid)).fetchall()
+                result['bottom5'] = dicts_from_rows(rows)
 
-    rows = db.execute("""
-        SELECT e.*, s.name as student_name FROM events e
-        JOIN students s ON e.student_id = s.id WHERE s.cohort_id = ?
-        ORDER BY e.event_date DESC, e.id DESC LIMIT 5
-    """, (cid,)).fetchall()
-    result['recent_events'] = dicts_from_rows(rows)
-    rows = db.execute("""
-        SELECT se.*, COUNT(DISTINCT si.student_id) as student_count
-        FROM score_exams se LEFT JOIN score_items si ON se.id = si.exam_id
-        WHERE se.cohort_id = ? GROUP BY se.id ORDER BY se.exam_date DESC LIMIT 3
-    """, (cid,)).fetchall()
-    result['recent_exams'] = dicts_from_rows(rows)
+        rows = db.execute("""
+            SELECT e.*, s.name as student_name FROM events e
+            JOIN students s ON e.student_id = s.id WHERE s.cohort_id = ?
+            ORDER BY e.event_date DESC, e.id DESC LIMIT 5
+        """, (cid,)).fetchall()
+        result['recent_events'] = dicts_from_rows(rows)
+        rows = db.execute("""
+            SELECT se.*, COUNT(DISTINCT si.student_id) as student_count
+            FROM score_exams se LEFT JOIN score_items si ON se.id = si.exam_id
+            WHERE se.cohort_id = ? GROUP BY se.id ORDER BY se.exam_date DESC LIMIT 3
+        """, (cid,)).fetchall()
+        result['recent_exams'] = dicts_from_rows(rows)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     return jsonify(result)
 
 
