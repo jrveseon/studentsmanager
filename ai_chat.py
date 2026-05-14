@@ -48,22 +48,19 @@ def build_rich_system_prompt(db, cohort_id, semester_id):
     parts.append(f"📌 查询日期：{__import__('datetime').datetime.now().strftime('%Y-%m-%d')}")
     parts.append("")
 
-    # ── 完整学生信息表（包含所有字段） ──
+    # ── 完整学生信息表（精简字段，减少token消耗） ──
     students = db.execute("""
-        SELECT student_no, name, gender, birth_date, ethnicity, id_number,
-               group_name, phone, parent_phone, address,
-               household_type, household_loc,
-               father, father_work, father_phone,
-               mother, mother_work, mother_phone
+        SELECT student_no, name, gender, birth_date, ethnicity,
+               group_name, phone, parent_phone
         FROM students WHERE cohort_id = ? AND is_active = 1
         ORDER BY CAST(NULLIF(student_no, '') AS INTEGER)
     """, (cohort_id,)).fetchall()
 
     sarr = [dict(r) for r in students]
-    parts.append(f"## 📋 学生完整信息表（共 {len(sarr)} 人）")
+    parts.append(f"## 📋 学生信息（共 {len(sarr)} 人）")
     parts.append("")
-    parts.append("| 学号 | 姓名 | 性别 | 出生日期 | 民族 | 小组 | 现住址 | 户口类别 | 户口所在地 | 父亲 | 父亲单位 | 父亲电话 | 母亲 | 母亲单位 | 母亲电话 | 联系电话 | 家长电话 |")
-    parts.append("|------|------|------|----------|------|------|--------|----------|------------|------|----------|----------|------|----------|----------|----------|----------|")
+    parts.append("| 学号 | 姓名 | 性别 | 出生日期 | 民族 | 小组 | 本人电话 | 家长电话 |")
+    parts.append("|------|------|------|----------|------|------|----------|----------|")
     for s in sarr:
         parts.append(
             f"| {format_val(s['student_no'])} "
@@ -72,15 +69,6 @@ def build_rich_system_prompt(db, cohort_id, semester_id):
             f"| {format_val(s['birth_date'])} "
             f"| {format_val(s['ethnicity'])} "
             f"| {format_val(s['group_name'])} "
-            f"| {format_val(s['address'])} "
-            f"| {format_val(s['household_type'])} "
-            f"| {format_val(s['household_loc'])} "
-            f"| {format_val(s['father'])} "
-            f"| {format_val(s['father_work'])} "
-            f"| {format_val(s['father_phone'])} "
-            f"| {format_val(s['mother'])} "
-            f"| {format_val(s['mother_work'])} "
-            f"| {format_val(s['mother_phone'])} "
             f"| {format_val(s['phone'])} "
             f"| {format_val(s['parent_phone'])} |"
         )
@@ -264,7 +252,7 @@ def call_ai_api_with_history(settings, system_prompt, user_message, history):
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=25) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             result = json.loads(resp.read().decode('utf-8'))
             reply = result['choices'][0]['message']['content'].strip()
             return {'reply': reply, 'actions': []}
