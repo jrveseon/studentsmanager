@@ -121,17 +121,32 @@
 
         <!-- 活跃届次 -->
         <div class="card p-5 mb-4">
-            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                <i class="lucide lucide-layers text-green-500"></i> 当前届次
-                <span class="text-xs text-gray-400" x-text="'(' + cohorts.length + ' 个)'"></span>
-            </h3>
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <i class="lucide lucide-layers text-green-500"></i> 当前届次
+                    <span class="text-xs text-gray-400" x-text="'(' + cohorts.length + ' 个)'"></span>
+                </h3>
+                <!-- 批量工具栏 -->
+                <div x-show="selectedActive.length > 0" class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500" x-text="'已选 ' + selectedActive.length + ' 个'"></span>
+                    <button @click="batchArchive()" class="px-3 py-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100">批量归档</button>
+                    <button @click="selectAllActive()" class="text-xs text-primary-500 hover:underline">全选</button>
+                    <button @click="selectedActive = []" class="text-xs text-gray-400 hover:text-gray-600">取消</button>
+                </div>
+                <button x-show="selectedActive.length === 0 && cohorts.length > 0" @click="selectAllActive()" class="text-xs text-primary-500 hover:underline">全选</button>
+            </div>
             <div x-show="!cohorts.length" class="text-center py-6 text-gray-400 text-sm">暂无届次</div>
-            <div class="space-y-2">
+            <div class="space-y-1.5">
                 <template x-for="c in cohorts" :key="c.id">
-                    <div class="flex items-center justify-between py-3 px-4 rounded-lg border border-gray-100 hover:bg-gray-50"
-                         :class="{'border-primary-200 bg-primary-50/30': c.id == activeCohortId}">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                    <div class="flex items-center justify-between py-2.5 px-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
+                         :class="{
+                             'border-primary-200 bg-primary-50/30': c.id == activeCohortId,
+                             'ring-1 ring-primary-300 bg-primary-50': selectedActive.includes(c.id)
+                         }">
+                        <div class="flex items-center gap-2.5">
+                            <input type="checkbox" :value="c.id" x-model="selectedActive"
+                                   class="rounded border-gray-300 text-primary-500 focus:ring-primary-300 shrink-0">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
                                  :class="c.id == activeCohortId ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-500'"
                                  x-text="c.class_no"></div>
                             <div>
@@ -140,7 +155,7 @@
                             </div>
                             <span x-show="c.id == activeCohortId" class="px-2 py-0.5 bg-primary-100 text-primary-600 rounded text-xs font-medium">当前</span>
                         </div>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 shrink-0">
                             <button x-show="c.id != activeCohortId" @click="switchCohort(c.id)" class="text-xs text-primary-500 hover:underline px-2 py-1">切换</button>
                             <button @click="archiveCohort(c)" class="text-xs text-gray-400 hover:text-amber-600 px-2 py-1">归档</button>
                         </div>
@@ -151,28 +166,41 @@
 
         <!-- 已归档届次 -->
         <div class="card p-5 mb-4">
-            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                <i class="lucide lucide-archive text-amber-500"></i> 已归档届次
-                <span class="text-xs text-gray-400" x-text="'(' + archived.length + ' 个)'"></span>
-            </h3>
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <i class="lucide lucide-archive text-amber-500"></i> 已归档届次
+                    <span class="text-xs text-gray-400" x-text="'(' + archived.length + ' 个)'"></span>
+                </h3>
+                <div x-show="selectedArchived.length > 0" class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500" x-text="'已选 ' + selectedArchived.length + ' 个'"></span>
+                    <button @click="batchRestore()" class="px-3 py-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100">批量恢复</button>
+                    <button @click="batchDeleteArchived()" class="px-3 py-1 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100">批量删除</button>
+                    <button @click="selectAllArchived()" class="text-xs text-primary-500 hover:underline">全选</button>
+                    <button @click="selectedArchived = []" class="text-xs text-gray-400 hover:text-gray-600">取消</button>
+                </div>
+                <button x-show="selectedArchived.length === 0 && archived.length > 0" @click="selectAllArchived()" class="text-xs text-primary-500 hover:underline">全选</button>
+            </div>
             <div x-show="!archived.length" class="text-center py-6 text-gray-400 text-sm">
                 <i class="lucide lucide-inbox text-2xl text-gray-200 block mb-2"></i>
                 暂无已归档届次
             </div>
-            <div class="space-y-2">
+            <div class="space-y-1.5">
                 <template x-for="c in archived" :key="c.id">
-                    <div class="flex items-center justify-between py-3 px-4 rounded-lg border border-gray-100 bg-gray-50/50">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-500" x-text="c.class_no"></div>
+                    <div class="flex items-center justify-between py-2.5 px-3 rounded-lg border border-gray-100 bg-gray-50/50 transition-colors"
+                         :class="{'ring-1 ring-amber-300 bg-amber-50/50': selectedArchived.includes(c.id)}">
+                        <div class="flex items-center gap-2.5">
+                            <input type="checkbox" :value="c.id" x-model="selectedArchived"
+                                   class="rounded border-gray-300 text-amber-500 focus:ring-amber-300 shrink-0">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-500 shrink-0" x-text="c.class_no"></div>
                             <div>
                                 <div class="text-sm font-medium text-gray-500" x-text="c.display_name"></div>
                                 <div class="text-xs text-gray-400" x-text="'创建于 ' + (c.created_at || '').slice(0,10)"></div>
                             </div>
                             <span class="px-2 py-0.5 bg-gray-100 text-gray-400 rounded text-xs">已归档</span>
                         </div>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 shrink-0">
                             <button @click="restoreCohort(c)" class="text-xs text-emerald-600 hover:underline px-2 py-1">恢复</button>
-                            <button @click="permanentDeleteCohort(c)" class="text-xs text-red-400 hover:text-red-600 px-2 py-1">彻底删除</button>
+                            <button @click="permanentDeleteCohort(c)" class="text-xs text-red-400 hover:text-red-600 px-2 py-1">删除</button>
                         </div>
                     </div>
                 </template>
@@ -186,6 +214,7 @@
             <div class="text-sm text-gray-500 space-y-2">
                 <p><b>归档</b>：隐藏届次，数据保留，可随时恢复。</p>
                 <p><b>彻底删除</b>：<span class="text-red-500">永久删除该届次所有学生、积分、成绩、事件数据，不可恢复。</span></p>
+                <p>勾选多个届次后可进行批量操作。</p>
             </div>
         </div>
     </div>
@@ -277,6 +306,9 @@ function settingsPage() {
         ai: { provider: '', api_key: '', model: '', api_url: '' },
         aiSaving: false,
         aiSaved: false,
+        // 多选
+        selectedActive: [],
+        selectedArchived: [],
 
         async load() {
             this.cohorts = await api.get('/api/cohorts');
@@ -322,6 +354,44 @@ function settingsPage() {
             if (!confirm('⚠️ 确定彻底删除 '+c.display_name+'？\n\n该届次下所有学生、积分、成绩、事件数据将被永久删除，不可恢复！')) return;
             if (!confirm('再次确认：真的要永久删除 '+c.display_name+' 吗？')) return;
             await api.del('/api/cohorts/' + c.id + '?permanent=true');
+            location.reload();
+        },
+
+        /* ── 批量操作 ── */
+        selectAllActive() {
+            this.selectedActive = this.selectedActive.length === this.cohorts.length
+                ? [] : this.cohorts.map(c => c.id);
+        },
+        selectAllArchived() {
+            this.selectedArchived = this.selectedArchived.length === this.archived.length
+                ? [] : this.archived.map(c => c.id);
+        },
+        async batchArchive() {
+            const ids = this.selectedActive;
+            if (!ids.length) return;
+            if (!confirm('确定归档选中的 ' + ids.length + ' 个届次？数据不会丢失。')) return;
+            for (const id of ids) {
+                await api.del('/api/cohorts/' + id);
+            }
+            location.reload();
+        },
+        async batchRestore() {
+            const ids = this.selectedArchived;
+            if (!ids.length) return;
+            if (!confirm('确定恢复选中的 ' + ids.length + ' 个届次？')) return;
+            for (const id of ids) {
+                await api.post('/api/cohorts/' + id + '/restore');
+            }
+            location.reload();
+        },
+        async batchDeleteArchived() {
+            const ids = this.selectedArchived;
+            if (!ids.length) return;
+            if (!confirm('⚠️ 确定彻底删除选中的 ' + ids.length + ' 个届次？\n\n所有相关数据将永久删除，不可恢复！')) return;
+            if (!confirm('再次确认：真的要永久删除这 ' + ids.length + ' 个届次吗？')) return;
+            for (const id of ids) {
+                try { await api.del('/api/cohorts/' + id + '?permanent=true'); } catch(e) {}
+            }
             location.reload();
         },
 
