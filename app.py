@@ -1621,7 +1621,8 @@ def _execute_ai_actions(db, reply, cohort_id, semester_id):
                 updated = 0
                 not_found = []
 
-                # 学号更新：先清空所有目标学生学号，避免临时冲突
+                # 学号更新：先用临时占位值替换旧学号，避免唯一约束冲突
+                # 不能用 NULL（列有 NOT NULL 约束），用 _TEMP_<id> 作为临时值
                 if field == 'student_no':
                     names = [item.get('name', '') for item in students if item.get('name')]
                     for n in names:
@@ -1630,7 +1631,7 @@ def _execute_ai_actions(db, reply, cohort_id, semester_id):
                             (cohort_id, f'%{n}%')
                         ).fetchone()
                         if s:
-                            db.execute("UPDATE students SET student_no = NULL WHERE id = ?", (s['id'],))
+                            db.execute("UPDATE students SET student_no = '_TEMP_' || id WHERE id = ?", (s['id'],))
                     db.commit()
 
                 for item in students:
