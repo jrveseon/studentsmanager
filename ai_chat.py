@@ -6,7 +6,7 @@ import urllib.error
 
 def get_ai_settings(db):
     """从settings表获取AI配置"""
-    rows = db.execute("SELECT key, value FROM settings WHERE key LIKE 'ai_%'").fetchall()
+    rows = db.execute("SELECT key, value FROM settings WHERE key >= 'ai_' AND key < 'aj'").fetchall()
     settings = {r['key']: r['value'] for r in rows}
     return {
         'provider': settings.get('ai_provider', ''),
