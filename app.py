@@ -1620,6 +1620,19 @@ def _execute_ai_actions(db, reply, cohort_id, semester_id):
                     continue
                 updated = 0
                 not_found = []
+
+                # 学号更新：先清空所有目标学生学号，避免临时冲突
+                if field == 'student_no':
+                    names = [item.get('name', '') for item in students if item.get('name')]
+                    for n in names:
+                        s = db.execute(
+                            "SELECT id FROM students WHERE cohort_id = ? AND name LIKE ? AND is_active = 1",
+                            (cohort_id, f'%{n}%')
+                        ).fetchone()
+                        if s:
+                            db.execute("UPDATE students SET student_no = NULL WHERE id = ?", (s['id'],))
+                    db.commit()
+
                 for item in students:
                     name = item.get('name', '')
                     value = item.get('value', '')
