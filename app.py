@@ -1284,7 +1284,9 @@ def chat():
 
         return jsonify(rule_result)
     except Exception as e:
-        return jsonify({'reply': f'处理出错：{str(e)[:200]}', 'actions': []})
+        import traceback
+        tb = traceback.format_exc()
+        return jsonify({'reply': f'处理出错：{str(e)[:200]}', 'actions': [], '_debug': tb[-300:]})
 
 
 @app.route('/api/chat/upload', methods=['POST'])
