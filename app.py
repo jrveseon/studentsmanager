@@ -1659,9 +1659,9 @@ def _execute_ai_actions(db, reply, cohort_id, semester_id):
                         log.append(f'❌ 学号冲突，已取消更新：{"；".join(conflicts)}')
                         continue
 
-                    # 第一步：所有目标学生设临时学号（用主键ID做后缀保证唯一，满足NOT NULL）
+                    # 第一步：所有目标学生设临时学号（取主键ID的负值，保证唯一且兼容INTEGER/TEXT类型）
                     for sid in update_map:
-                        db.execute("UPDATE students SET student_no = '_TEMP_' || id WHERE id = ?", (sid,))
+                        db.execute("UPDATE students SET student_no = -id WHERE id = ?", (sid,))
 
                     # 第二步：写入新学号（此时已无冲突）
                     for sid, info in update_map.items():
