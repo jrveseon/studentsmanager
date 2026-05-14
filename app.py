@@ -364,7 +364,7 @@ def get_students():
     if group:
         query += " AND group_name = ?"
         params.append(group)
-    query += " ORDER BY CAST(student_no AS INTEGER), student_no"
+    query += " ORDER BY CAST(NULLIF(student_no, '') AS INTEGER), student_no"
     return jsonify(dicts_from_rows(g.db.execute(query, params).fetchall()))
 
 
