@@ -273,6 +273,13 @@ def init_db():
         except Exception:
             pass
 
+    # 清理历史遗留脏数据：之前 batch_update_students 临时占位写入的 _TEMP_* 和负值
+    try:
+        db.execute("UPDATE students SET student_no = ? WHERE student_no LIKE ?", ('0', '%TEMP%'))
+        db.execute("UPDATE students SET student_no = ? WHERE CAST(student_no AS INTEGER) < 0", ('0',))
+    except Exception:
+        pass
+
     db.commit()
     db.close()
 
