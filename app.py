@@ -1557,6 +1557,9 @@ def _execute_ai_actions(db, reply, cohort_id, semester_id):
                 if not name or not field:
                     log.append(f'❌ 更新学生失败：缺少姓名或字段')
                     continue
+                # 字段别名映射：class_name → group_name
+                field_aliases = {'class_name': 'group_name'}
+                field = field_aliases.get(field, field)
                 # 查找学生
                 student = db.execute(
                     "SELECT id, name FROM students WHERE cohort_id = ? AND name LIKE ? AND is_active = 1",
