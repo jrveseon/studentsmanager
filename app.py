@@ -21,9 +21,9 @@ init_db()
 # 之前 batch_update_students 临时占位写过 '_TEMP_' 和负值到 student_no，
 # 导致 CAST(student_no AS INTEGER) 报错。每次启动清理一次。
 _migrate_db = Database()
-_migrate_db.execute("UPDATE students SET student_no = '0' WHERE student_no LIKE '%_TEMP_%'")
+_migrate_db.execute("UPDATE students SET student_no = ? WHERE student_no LIKE ?", ('0', '%_TEMP_%'))
 try:
-    _migrate_db.execute("UPDATE students SET student_no = '0' WHERE CAST(student_no AS INTEGER) < 0")
+    _migrate_db.execute("UPDATE students SET student_no = ? WHERE CAST(student_no AS INTEGER) < 0", ('0',))
 except Exception:
     pass  # PostgreSQL: CAST 可能因其他非法值异常，_TEMP_ 已清理
 del _migrate_db
