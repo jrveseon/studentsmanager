@@ -1309,11 +1309,12 @@ def chat_upload():
         return jsonify({'ok': False, 'error': '仅支持xlsx/xls格式', 'reply': '目前仅支持上传 Excel 文件（.xlsx / .xls）'})
 
     # 保存临时文件
-    tmp_name = f'chat_upload_{uuid.uuid4().hex[:8]}.{ext}'
-    tmp_path = os.path.join(app.root_path, 'uploads', tmp_name)
-    file.save(tmp_path)
-
     try:
+        os.makedirs(os.path.join(app.root_path, 'uploads'), exist_ok=True)
+        tmp_name = f'chat_upload_{uuid.uuid4().hex[:8]}.{ext}'
+        tmp_path = os.path.join(app.root_path, 'uploads', tmp_name)
+        file.save(tmp_path)
+
         # 解析 Excel
         import openpyxl
         wb = openpyxl.load_workbook(tmp_path, read_only=True, data_only=True)
