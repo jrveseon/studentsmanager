@@ -92,7 +92,12 @@ class Database:
                 if m and m.group(1) not in ('settings',):
                     sql = sql.rstrip(';') + ' RETURNING id'
 
-            c.execute(sql, params or ())
+            try:
+                c.execute(sql, params or ())
+            except Exception as e:
+                # 记录失败SQL用于调试
+                sql_preview = sql[:200].replace('\n', ' ')
+                raise Exception(f'{e} | SQL: {sql_preview} | PARAMS: {params}')
 
             # 捕获 INSERT 返回的 ID
             if upper.startswith('INSERT'):
