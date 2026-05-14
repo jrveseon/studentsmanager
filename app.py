@@ -1499,12 +1499,13 @@ def _try_auto_import(db, header, data_rows, cohort_id, semester_id, filename):
             if not student:
                 skipped += 1
                 continue
-            # 写入本周积分（如已有则累加）
-            latest = db.execute(
-                "SELECT MAX(week_num) as w FROM weekly_points WHERE student_id = ? AND semester_id = ?",
-                (student['id'], semester_id)
-            ).fetchone()
-            week = latest['w'] if latest and latest['w'] else 1
+            if 'week' not in locals():
+                # 批量导入统一开新的一周：取全班最新周+1，避免数据挤在同一周
+                max_w = db.execute(
+                    "SELECT COALESCE(MAX(week_num), 0) as w FROM weekly_points WHERE semester_id = ?",
+                    (semester_id,)
+                ).fetchone()
+                week = (max_w['w'] or 0) + 1
             existing = db.execute(
                 "SELECT id, score FROM weekly_points WHERE student_id = ? AND week_num = ? AND semester_id = ?",
                 (student['id'], week, semester_id)
