@@ -1414,7 +1414,7 @@ def _try_auto_import(db, header, data_rows, cohort_id, semester_id, filename):
     for i, h in enumerate(header):
         if '姓名' in h or '名字' in h or '学生' in h:
             name_col = i
-        elif h and h not in ('序号', '学号', '排名', '名次', '总分', '班次', '进退步'):
+        elif h and h not in ('序号', '学号', '排名', '名次', '总分', '班次', '进退步', '积分', '得分', '扣分', '加分', '加减分', '量化'):
             # 检查是否数值列（科目）
             is_num = True
             for r in data_rows[:5]:
@@ -1464,6 +1464,63 @@ def _try_auto_import(db, header, data_rows, cohort_id, semester_id, filename):
             if len(not_found) > 10:
                 msg += f'等{len(not_found)}人'
         return {'ok': True, 'message': msg, 'type': 'student_no'}
+
+    # 检测是否为量化积分表（有姓名列 + 含"积分""得分"等关键词的数值列）
+    points_col = None
+    for i, h in enumerate(header):
+        h_lower = h.lower() if h else ''
+        if any(kw in h_lower for kw in ('积分', '得分', '量化', '加分', '扣分', '加减分', 'score', 'point')):
+            points_col = i
+            break
+    if name_col is not None and points_col is not None and len(data_rows) >= 1:
+        imported = 0
+        skipped = 0
+        for row in data_rows:
+            if name_col >= len(row) or points_col >= len(row):
+                continue
+            sname = str(row[name_col]).strip()
+            val = row[points_col]
+            if not sname or val == '' or val is None:
+                continue
+            try:
+                score_val = float(val)
+            except (ValueError, TypeError):
+                skipped += 1
+                continue
+            student = db.execute(
+                "SELECT id FROM students WHERE cohort_id = ? AND name = ? AND is_active = 1",
+                (cohort_id, sname)
+            ).fetchone()
+            if not student:
+                student = db.execute(
+                    "SELECT id FROM students WHERE cohort_id = ? AND name LIKE ? AND is_active = 1 LIMIT 1",
+                    (cohort_id, f'%{sname}%')
+                ).fetchone()
+            if not student:
+                skipped += 1
+                continue
+            # 写入本周积分（如已有则累加）
+            latest = db.execute(
+                "SELECT MAX(week_num) as w FROM weekly_points WHERE student_id = ? AND semester_id = ?",
+                (student['id'], semester_id)
+            ).fetchone()
+            week = latest['w'] if latest and latest['w'] else 1
+            existing = db.execute(
+                "SELECT id, score FROM weekly_points WHERE student_id = ? AND week_num = ? AND semester_id = ?",
+                (student['id'], week, semester_id)
+            ).fetchone()
+            if existing:
+                new_score = existing['score'] + score_val
+                db.execute("UPDATE weekly_points SET score = ? WHERE id = ?", (new_score, existing['id']))
+            else:
+                db.execute("INSERT INTO weekly_points (student_id, week_num, semester_id, score, source) VALUES (?, ?, ?, ?, 'import')",
+                           (student['id'], week, semester_id, score_val))
+            imported += 1
+        db.commit()
+        msg = f'✅ 已自动识别为量化积分表，为 **{imported}** 名学生录入积分'
+        if skipped:
+            msg += f'\n⚠️ {skipped} 条数据跳过'
+        return {'ok': True, 'message': msg, 'type': 'points'}
 
     # 如果识别为成绩表（有姓名列+至少1个科目列+数据>1行）
     if name_col is not None and len(subject_cols) >= 1 and len(data_rows) >= 1:
