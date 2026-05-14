@@ -449,6 +449,20 @@ def batch_delete_students():
     return jsonify({'ok': True, 'count': len(ids)})
 
 
+@app.route('/api/students/reset', methods=['POST'])
+def reset_students():
+    """重置当前届次的全部学生数据（硬删除，含积分、成绩、事件），用于数据损坏后重新导入"""
+    cid = require_cohort()
+    if not cid:
+        return jsonify({'ok': False, 'error': '请先选择届次'}), 400
+    g.db.execute("DELETE FROM weekly_points WHERE student_id IN (SELECT id FROM students WHERE cohort_id = ?)", (cid,))
+    g.db.execute("DELETE FROM score_items WHERE student_id IN (SELECT id FROM students WHERE cohort_id = ?)", (cid,))
+    g.db.execute("DELETE FROM events WHERE student_id IN (SELECT id FROM students WHERE cohort_id = ?)", (cid,))
+    g.db.execute("DELETE FROM students WHERE cohort_id = ?", (cid,))
+    g.db.commit()
+    return jsonify({'ok': True})
+
+
 @app.route('/api/students/batch/group', methods=['POST'])
 def batch_set_group():
     """批量设置小组"""
