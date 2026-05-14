@@ -429,7 +429,7 @@ def handle_query_scores_exam_detail(db, cohort_id, msg):
     # 各科统计
     stats = db.execute("""
         SELECT subject,
-               ROUND(AVG(score), 1) as avg_score,
+               ROUND(CAST(AVG(score) AS NUMERIC), 1) as avg_score,
                MAX(score) as max_score,
                MIN(score) as min_score,
                COUNT(*) as cnt

@@ -720,7 +720,7 @@ def get_group_summary():
     rows = g.db.execute("""
         SELECT s.group_name,
                COALESCE(SUM(wp.score), 0) as total_score,
-               ROUND(COALESCE(AVG(wp.score), 0), 1) as avg_score,
+               ROUND(CAST(COALESCE(AVG(wp.score), 0) AS NUMERIC), 1) as avg_score,
                COUNT(DISTINCT s.id) as member_count
         FROM students s
         LEFT JOIN weekly_points wp ON s.id = wp.student_id AND wp.semester_id = ?
@@ -979,7 +979,7 @@ def get_class_stats():
     if not exam_id:
         return jsonify({})
     rows = g.db.execute("""
-        SELECT subject, ROUND(AVG(score), 1) as avg_score, MAX(score) as max_score,
+        SELECT subject, ROUND(CAST(AVG(score) AS NUMERIC), 1) as avg_score, MAX(score) as max_score,
                MIN(score) as min_score, COUNT(*) as count,
                SUM(CASE WHEN score >= 60 THEN 1 ELSE 0 END) as pass_count
         FROM score_items WHERE exam_id = ? GROUP BY subject ORDER BY subject
@@ -1080,7 +1080,7 @@ def get_dashboard():
             if latest and latest['max_week']:
                 result['current_week'] = latest['max_week']
                 row = db.execute("""
-                    SELECT ROUND(AVG(wp.score), 1) as avg_score FROM weekly_points wp
+                    SELECT ROUND(CAST(AVG(wp.score) AS NUMERIC), 1) as avg_score FROM weekly_points wp
                     JOIN students s ON wp.student_id = s.id
                     WHERE wp.semester_id = ? AND wp.week_num = ? AND s.cohort_id = ?
                 """, (sid, latest['max_week'], cid)).fetchone()
