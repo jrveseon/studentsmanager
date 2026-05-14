@@ -56,7 +56,7 @@ def build_rich_system_prompt(db, cohort_id, semester_id):
                father, father_work, father_phone,
                mother, mother_work, mother_phone
         FROM students WHERE cohort_id = ? AND is_active = 1
-        ORDER BY CAST(student_no AS INTEGER)
+        ORDER BY CAST(NULLIF(student_no, '') AS INTEGER)
     """, (cohort_id,)).fetchall()
 
     sarr = [dict(r) for r in students]

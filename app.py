@@ -7,7 +7,7 @@ from flask import Flask, render_template, request, jsonify, g, session, send_fro
 from db import (get_db, init_db, dict_from_row, dicts_from_rows,
                 get_active_cohort_id, set_active_cohort_id,
                 get_active_semester_id, set_active_semester_id,
-                create_default_semesters)
+                create_default_semesters, Database)
 
 app = Flask(__name__)
 app.config['DATABASE'] = os.path.join(os.path.dirname(__file__), 'data', 'class.db')
@@ -16,6 +16,17 @@ app.secret_key = os.environ.get('FLASK_SECRET', 'sun-class-manager-2024-default-
 
 # 确保数据库初始化（gunicorn 导入时触发，不依赖 __main__）
 init_db()
+
+# ── 数据迁移：启动时自动修复历史遗留的脏数据 ──
+# 之前 batch_update_students 临时占位写过 '_TEMP_' 和负值到 student_no，
+# 导致 CAST(student_no AS INTEGER) 报错。每次启动清理一次。
+_migrate_db = Database()
+_migrate_db.execute("UPDATE students SET student_no = '0' WHERE student_no LIKE '%_TEMP_%'")
+try:
+    _migrate_db.execute("UPDATE students SET student_no = '0' WHERE CAST(student_no AS INTEGER) < 0")
+except Exception:
+    pass  # PostgreSQL: CAST 可能因其他非法值异常，_TEMP_ 已清理
+del _migrate_db
 
 
 def get_cohort_info():

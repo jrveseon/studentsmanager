@@ -161,7 +161,7 @@ def handle_query_students(db, cohort_id, msg):
     rows = db.execute("""
         SELECT name, student_no, group_name FROM students
         WHERE cohort_id = ? AND is_active = 1
-        ORDER BY CAST(student_no AS INTEGER), student_no
+        ORDER BY CAST(NULLIF(student_no, '') AS INTEGER), student_no
     """, (cohort_id,)).fetchall()
     if not rows:
         return {'reply': '当前还没有学生数据，请先到「数据导入」页面导入学生信息。', 'actions': []}
@@ -204,7 +204,7 @@ def handle_query_groups(db, cohort_id, msg):
         if gname in ('各小组', '所有组', '什么组', '哪个组'):
             return _show_all_groups(db, cohort_id)
         students = db.execute(
-            "SELECT name, student_no FROM students WHERE cohort_id = ? AND is_active = 1 AND group_name = ? ORDER BY CAST(student_no AS INTEGER)",
+            "SELECT name, student_no FROM students WHERE cohort_id = ? AND is_active = 1 AND group_name = ? ORDER BY CAST(NULLIF(student_no, '') AS INTEGER)",
             (cohort_id, gname)
         ).fetchall()
         if students:
@@ -542,7 +542,7 @@ def handle_add_student(db, cohort_id, msg):
     existing = db.execute("SELECT id FROM students WHERE cohort_id = ? AND name = ?", (cohort_id, name)).fetchone()
     if existing:
         return {'reply': f'学生「{name}」已存在', 'actions': []}
-    max_no = db.execute("SELECT MAX(CAST(student_no AS INTEGER)) as m FROM students WHERE cohort_id = ? AND student_no NOT LIKE 'AUTO-%'",
+    max_no = db.execute("SELECT MAX(CAST(NULLIF(student_no, '') AS INTEGER)) as m FROM students WHERE cohort_id = ? AND student_no NOT LIKE 'AUTO-%'",
                         (cohort_id,)).fetchone()
     next_no = str((max_no['m'] or 0) + 1)
     db.execute("INSERT INTO students (cohort_id, student_no, name) VALUES (?, ?, ?)", (cohort_id, next_no, name))
