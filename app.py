@@ -1237,60 +1237,54 @@ def import_scores():
 # ── AI对话 API ─────────────────────────────────────────
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    """AI对话接口
-    策略：
-    - 已配置AI（有API Key）→ 查询类问题直接走大模型，操作类（加分/记录事件/添加学生）走规则引擎
-    - 未配置AI → 全部走规则引擎
-    """
-    cid = require_cohort()
-    if not cid:
-        return jsonify({'reply': '请先在设置页面创建一个届次', 'actions': []})
-    data = request.json
-    message = data.get('message', '').strip()
-    messages = data.get('messages', [])
-    if not message:
-        return jsonify({'reply': '请输入内容', 'actions': []})
-    sid = get_active_semester_id(g.db)
+    """AI对话接口"""
+    try:
+        cid = require_cohort()
+        if not cid:
+            return jsonify({'reply': '请先在设置页面创建一个届次', 'actions': []})
+        data = request.json
+        message = data.get('message', '').strip()
+        messages = data.get('messages', [])
+        if not message:
+            return jsonify({'reply': '请输入内容', 'actions': []})
+        sid = get_active_semester_id(g.db)
 
-    from chat import process_message
-    from ai_chat import get_ai_settings, build_rich_system_prompt, call_ai_api_with_history
+        from chat import process_message
+        from ai_chat import get_ai_settings, build_rich_system_prompt, call_ai_api_with_history
 
-    ai_settings = get_ai_settings(g.db)
-    has_ai = bool(ai_settings['provider'] and ai_settings['api_key'])
+        ai_settings = get_ai_settings(g.db)
+        has_ai = bool(ai_settings['provider'] and ai_settings['api_key'])
 
-    # 判断是否是操作类指令（加分、记录事件、添加学生）
-    is_operation = any(kw in message for kw in [
-        '加', '减', '加分', '减分', '记录', '添加学生', '添加同学',
-        '录入', '新增', '加入',
-    ]) and any(kw in message for kw in [
-        '分', '违纪', '处分', '表扬', '谈话', '家访', '学生', '同学',
-    ])
+        # 判断是否是操作类指令
+        is_operation = any(kw in message for kw in [
+            '加', '减', '加分', '减分', '记录', '添加学生', '添加同学',
+            '录入', '新增', '加入',
+        ]) and any(kw in message for kw in [
+            '分', '违纪', '处分', '表扬', '谈话', '家访', '学生', '同学',
+        ])
 
-    if has_ai and not is_operation:
-        # ── AI优先：已配置AI且非操作类指令，直接调用大模型 ──
-        system_prompt = build_rich_system_prompt(g.db, cid, sid)
-        ai_result = call_ai_api_with_history(ai_settings, system_prompt, message, messages)
-        if ai_result and 'reply' in ai_result:
-            # 解析并执行AI回复中的操作指令
-            reply, exec_log = _execute_ai_actions(g.db, ai_result['reply'], cid, sid)
-            if exec_log:
-                reply += '\n\n' + '\n'.join(exec_log)
-            return jsonify({'reply': reply, 'actions': []})
-        # AI调用失败，回退规则引擎
+        if has_ai and not is_operation:
+            system_prompt = build_rich_system_prompt(g.db, cid, sid)
+            ai_result = call_ai_api_with_history(ai_settings, system_prompt, message, messages)
+            if ai_result and 'reply' in ai_result:
+                reply, exec_log = _execute_ai_actions(g.db, ai_result['reply'], cid, sid)
+                if exec_log:
+                    reply += '\n\n' + '\n'.join(exec_log)
+                return jsonify({'reply': reply, 'actions': []})
+            rule_result = process_message(g.db, message, cid, sid)
+            return jsonify({'reply': rule_result.get('reply', '查询出错，请稍后再试'), 'actions': []})
+
         rule_result = process_message(g.db, message, cid, sid)
-        return jsonify({'reply': rule_result.get('reply', '查询出错，请稍后再试'), 'actions': []})
 
-    # ── 规则引擎：AI未配置 或 操作类指令 ──
-    rule_result = process_message(g.db, message, cid, sid)
+        if rule_result.get('_intent') == 'unknown' and has_ai:
+            system_prompt = build_rich_system_prompt(g.db, cid, sid)
+            ai_result = call_ai_api_with_history(ai_settings, system_prompt, message, messages)
+            if ai_result and 'reply' in ai_result:
+                return jsonify(ai_result)
 
-    # 规则引擎不认识，且有AI兜底（如添加好友等操作类被误判）
-    if rule_result.get('_intent') == 'unknown' and has_ai:
-        system_prompt = build_rich_system_prompt(g.db, cid, sid)
-        ai_result = call_ai_api_with_history(ai_settings, system_prompt, message, messages)
-        if ai_result and 'reply' in ai_result:
-            return jsonify(ai_result)
-
-    return jsonify(rule_result)
+        return jsonify(rule_result)
+    except Exception as e:
+        return jsonify({'reply': f'处理出错：{str(e)[:200]}', 'actions': []})
 
 
 @app.route('/api/chat/upload', methods=['POST'])

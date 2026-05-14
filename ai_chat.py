@@ -251,7 +251,7 @@ def call_ai_api_with_history(settings, system_prompt, user_message, history):
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=25) as resp:
             result = json.loads(resp.read().decode('utf-8'))
             reply = result['choices'][0]['message']['content'].strip()
             return {'reply': reply, 'actions': []}
