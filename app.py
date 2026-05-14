@@ -1536,7 +1536,7 @@ def _execute_ai_actions(db, reply, cohort_id, semester_id):
     log = []
 
     # 允许的字段白名单
-    allowed = {'name','gender','birth_date','ethnicity','id_number','group_name',
+    allowed = {'name','gender','birth_date','ethnicity','id_number','group_name','class_name',
                'address','household_type','household_loc',
                'father','father_work','father_phone',
                'mother','mother_work','mother_phone','student_no'}
@@ -1636,6 +1636,9 @@ def _execute_ai_actions(db, reply, cohort_id, semester_id):
                 if field not in allowed:
                     log.append(f'❌ 批量更新失败：不允许的字段「{field}」')
                     continue
+                # 字段别名映射：AI习惯用 class_name，数据库字段是 group_name
+                field_aliases = {'class_name': 'group_name'}
+                field = field_aliases.get(field, field)
                 updated = 0
                 not_found = []
 
