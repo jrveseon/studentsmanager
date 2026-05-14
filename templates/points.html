@@ -324,18 +324,46 @@ function pointsPage() {
         async drawTrend() {
             if (!this.trendIds.length) return;
             const data = await api.get('/api/points/trend?student_ids=' + this.trendIds.join(','));
+            // 按姓名+学期分组（同一学生不同学期作为独立折线）
             const grouped = {};
-            data.forEach(r => { if (!grouped[r.name]) grouped[r.name] = []; grouped[r.name].push(r); });
+            data.forEach(r => {
+                const key = r.semester_name ? r.name + '·' + r.semester_name : r.name;
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(r);
+            });
+            // 按学期分组构建x轴标签（每学期从第1周开始）
+            const semesterWeeks = {}; // {semester_name: [{week_label, score}]}
+            data.forEach(r => {
+                const sem = r.semester_name || '其他';
+                if (!semesterWeeks[sem]) semesterWeeks[sem] = {};
+                semesterWeeks[sem][r.week_num] = true;
+            });
+            // 生成x轴唯一标签
+            const labels = [];
+            Object.keys(semesterWeeks).sort().forEach(sem => {
+                const weeks = Object.keys(semesterWeeks[sem]).map(Number).sort((a,b)=>a-b);
+                weeks.forEach(w => labels.push(sem + '第' + w + '周'));
+            });
             const colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899','#14b8a6','#a855f7'];
-            const datasets = Object.keys(grouped).map((name, i) => ({
-                label: name, data: grouped[name].map(r => r.score),
-                borderColor: colors[i % colors.length], tension: 0.3, pointRadius: 3
-            }));
-            const allWeeks = [...new Set(data.map(r => r.week_num))].sort((a,b)=>a-b);
+            const datasets = Object.keys(grouped).map((key, i) => {
+                const entries = grouped[key];
+                // 映射到labels对应位置
+                const dataMap = {};
+                entries.forEach(r => {
+                    const sem = r.semester_name || '其他';
+                    dataMap[sem + '第' + r.week_num + '周'] = r.score;
+                });
+                return {
+                    label: key,
+                    data: labels.map(l => dataMap[l] !== undefined ? dataMap[l] : null),
+                    borderColor: colors[i % colors.length],
+                    tension: 0.3, pointRadius: 3, spanGaps: false
+                };
+            });
             const ctx = document.getElementById('trendChart');
             if (this.trendChart) this.trendChart.destroy();
             this.trendChart = new Chart(ctx, {
-                type: 'line', data: { labels: allWeeks.map(w=>'第'+w+'周'), datasets },
+                type: 'line', data: { labels, datasets },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
             });
         },
